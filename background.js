@@ -21,8 +21,8 @@ import { calculateSunElevation, fetchCloudCover, classifyVisibility } from './li
 import { formatNotificationAirline } from './lib/airline-logos.js';
 import {
   buildAircraftDiagnosticRecord,
-  appendPollToRingBuffer,
-  DIAGNOSTICS_STORAGE_KEY
+  saveDiagnosticPoll,
+  migrateDiagnosticsStorage
 } from './lib/diagnostics.js';
 
 // ---- Configuration Defaults ----
@@ -626,7 +626,7 @@ async function pollFlights() {
             cpa: null,
             passClass: 'dropped',
             classificationResult: { flightType: 'unknown', rule: 'invalid_coordinates' },
-            droppedReason: 'invalid_coordinates',
+            droppedReason: 'other',
             pollTimeMs
           }));
           continue;
@@ -651,6 +651,14 @@ async function pollFlights() {
         }
 
         const classRes = classifyFlightWithRule(orig, dest);
+        const isInsideRadius = cpaRes.currentDistanceKm <= radiusKm;
+        const isUnknownType = classRes.flightType === 'unknown';
+
+        // Record only aircraft inside detection radius, plus any unknown flightType within fetch radius
+        if (!isInsideRadius && !isUnknownType) {
+          continue;
+        }
+
         const passClass = classifyPass({
           tCpa: cpaRes.tCpa,
           dCpa: cpaRes.dCpa,
@@ -658,26 +666,54 @@ async function pollFlights() {
           isInbound: cpaRes.isInbound
         }, settings);
 
-        // Check if dropped by any filter
+        // Determine drop reason among: flightFilter, altitudeFilter, minElevation, alertRule, other
         let dropReason = null;
-        if (altitudeFilter === 'high' && alt < 25000) dropReason = 'altitude_filter_high';
-        else if (altitudeFilter === 'low' && alt >= 25000) dropReason = 'altitude_filter_low';
-        else if (flightFilter === 'international' && classRes.flightType === 'domestic') dropReason = 'flight_filter_international';
-        else if (flightFilter === 'domestic' && classRes.flightType === 'international') dropReason = 'flight_filter_domestic';
-        else if (settings.airlineFilter && settings.airlineFilter.trim()) {
+
+        if (f.onGround || f.ground || alt < (settings.minAltitudeFt != null ? settings.minAltitudeFt : 0) ||
+            alt > (settings.maxAltitudeFt != null ? settings.maxAltitudeFt : 60000)) {
+          dropReason = 'other';
+        } else if (settings.airlineFilter && settings.airlineFilter.trim()) {
           const allowedAirlines = settings.airlineFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
           const icao = (f.airlineIcao || '').toUpperCase();
           const cs = (f.callsign || '').toUpperCase();
-          if (!allowedAirlines.some(code => icao === code || cs.startsWith(code))) dropReason = 'airline_filter';
-        }
-        else if (settings.aircraftFilter && settings.aircraftFilter.trim()) {
+          if (!allowedAirlines.some(code => icao === code || cs.startsWith(code))) dropReason = 'other';
+        } else if (settings.aircraftFilter && settings.aircraftFilter.trim()) {
           const allowedTypes = settings.aircraftFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
           const acType = (f.aircraftType || '').toUpperCase();
-          if (!allowedTypes.some(t => acType.includes(t))) dropReason = 'aircraft_filter';
+          if (!allowedTypes.some(t => acType.includes(t))) dropReason = 'other';
         }
-        else if (alt < (settings.minAltitudeFt != null ? settings.minAltitudeFt : 0) ||
-                 alt > (settings.maxAltitudeFt != null ? settings.maxAltitudeFt : 60000)) {
-          dropReason = 'altitude_bounds';
+
+        if (!dropReason && !isInsideRadius) {
+          dropReason = 'other'; // outside detection radius
+        }
+
+        if (!dropReason) {
+          if (flightFilter === 'international' && classRes.flightType === 'domestic') {
+            dropReason = 'flightFilter';
+          } else if (flightFilter === 'domestic' && classRes.flightType === 'international') {
+            dropReason = 'flightFilter';
+          }
+        }
+
+        if (!dropReason) {
+          if (altitudeFilter === 'high' && alt < 25000) {
+            dropReason = 'altitudeFilter';
+          } else if (altitudeFilter === 'low' && alt >= 25000) {
+            dropReason = 'altitudeFilter';
+          }
+        }
+
+        if (!dropReason) {
+          const minElev = settings.minElevationDeg != null ? settings.minElevationDeg : 15;
+          if (cpaRes.elevationAtCpa < minElev) {
+            dropReason = 'minElevation';
+          }
+        }
+
+        if (!dropReason) {
+          if (passClass !== 'overhead' || cpaRes.tCpa <= 0 || cpaRes.tCpa > 360) {
+            dropReason = 'alertRule';
+          }
         }
 
         diagEntries.push(buildAircraftDiagnosticRecord({
@@ -690,16 +726,15 @@ async function pollFlights() {
         }));
       }
 
-      const { [DIAGNOSTICS_STORAGE_KEY]: existingDiagBuffer = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
-      const updatedDiagBuffer = appendPollToRingBuffer(existingDiagBuffer, {
+      await saveDiagnosticPoll({
         pollTime: pollTimeMs,
         provider: settings.mockProviderEnabled ? 'mock' : (providerStatus.activeProvider || 'fr24'),
         rawAircraftCount: rawFlights.length,
+        detectionRadiusKm: radiusKm,
         pollingMode: isFastPolling ? 'fast' : 'normal',
         aircraftCount: diagEntries.length,
         aircraft: diagEntries
       });
-      await chrome.storage.local.set({ [DIAGNOSTICS_STORAGE_KEY]: updatedDiagBuffer });
     } catch (diagErr) {
       console.warn('Airvee: Failed to record diagnostics:', diagErr);
     }

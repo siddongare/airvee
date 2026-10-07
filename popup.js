@@ -32,7 +32,13 @@ import { getAirlineLogoHtml, getAirlineMonogramBadge, resolveAirlineMonogram } f
 import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoAircraft, DEFAULT_INHERENTLY_RARE_TYPES } from './lib/watchlist.js';
 import { predictLikelyFlightsToday, computeHeatmapData } from './lib/schedule.js';
 import { calculateSunElevation, classifyVisibility } from './lib/visibility.js';
-import { DIAGNOSTICS_STORAGE_KEY, verifyRedaction, generateDiagnosticsSummary } from './lib/diagnostics.js';
+import {
+  getDiagnosticPolls,
+  clearDiagnosticPolls,
+  verifyRedaction,
+  generateDiagnosticsSummary,
+  migrateDiagnosticsStorage
+} from './lib/diagnostics.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -574,11 +580,11 @@ function bindEvents() {
   if (btnExportDiag) {
     btnExportDiag.addEventListener('click', async () => {
       try {
-        const { [DIAGNOSTICS_STORAGE_KEY]: diagData = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
+        const diagData = await getDiagnosticPolls();
         const exportPayload = {
           exportedAt: new Date().toISOString(),
           pollCyclesCount: diagData.length,
-          summary: generateDiagnosticsSummary(diagData),
+          summary: generateDiagnosticsSummary(diagData, { radiusKm: currentSettings.radiusKm }),
           polls: diagData
         };
 
@@ -606,7 +612,7 @@ function bindEvents() {
   if (btnClearDiag) {
     btnClearDiag.addEventListener('click', async () => {
       if (confirm('Clear all stored diagnostics poll cycles?')) {
-        await chrome.storage.local.set({ [DIAGNOSTICS_STORAGE_KEY]: [] });
+        await clearDiagnosticPolls();
         alert('Diagnostics buffer cleared.');
       }
     });
