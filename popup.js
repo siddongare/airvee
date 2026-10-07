@@ -15,7 +15,8 @@ import {
   formatCoordinateForDisplay,
   isValidCoordinate,
   bearingToCompass,
-  getRelativeDirection
+  getRelativeDirection,
+  classifyPass
 } from './lib/geo.js';
 import { playAirportDoubleChime, playWavFallbackChime } from './lib/audio.js';
 import {
@@ -548,39 +549,41 @@ function tickCountdowns() {
     f.passesOverhead = dr.passesOverhead;
     f.bearingAtCpa = Math.round(dr.bearing);
     f.elevationAtCpa = Math.round(dr.elevation);
+    f.passClassification = classifyPass(f, currentSettings);
 
     hasUpdates = true;
   });
 
   if (hasUpdates) {
-    // 1. Hero Block
+    // 1. Hero Block (active only if hero exists and is overhead)
     const heroCountdown = $('#heroCountdownVal');
-    if (heroCountdown && currentFlights.length > 0) {
-      const hf = currentFlights[0];
-      const etaText = (hf.eta !== null && hf.eta > 0) ? formatETA(hf.eta) : '—';
-      heroCountdown.textContent = etaText;
+    const heroBlock = $('.hero-block');
+    if (heroCountdown && heroBlock && heroBlock.dataset.heroId) {
+      const hf = currentFlights.find(x => String(x.id) === String(heroBlock.dataset.heroId));
+      if (hf && hf.passClassification === 'overhead' && hf.eta !== null && hf.eta > 0) {
+        heroCountdown.textContent = formatETA(hf.eta);
+        const isUrgent = hf.eta <= 60;
+        heroCountdown.classList.toggle('overhead-urgent', isUrgent);
 
-      const isUrgent = hf.passesOverhead && hf.eta !== null && hf.eta > 0 && hf.eta <= 60;
-      heroCountdown.classList.toggle('overhead-urgent', isUrgent);
+        const bearingVal = (typeof hf.bearingAtCpa === 'number' && !isNaN(hf.bearingAtCpa)) ? hf.bearingAtCpa : 0;
+        const needle = $('#heroCompassNeedle');
+        if (needle) {
+          needle.style.transform = `rotate(${bearingVal}deg)`;
+        }
 
-      const bearingVal = (typeof hf.bearingAtCpa === 'number' && !isNaN(hf.bearingAtCpa)) ? hf.bearingAtCpa : 0;
-      const needle = $('#heroCompassNeedle');
-      if (needle) {
-        needle.style.transform = `rotate(${bearingVal}deg)`;
-      }
+        const lookAngles = $('#heroLookAngles');
+        if (lookAngles) {
+          const compass = bearingToCompass(bearingVal, false);
+          const rawElev = hf.elevationAtCpa != null ? hf.elevationAtCpa : hf.currentElevation;
+          const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
+          lookAngles.textContent = `${compass}  ·  ${elev}°  up`;
+        }
 
-      const lookAngles = $('#heroLookAngles');
-      if (lookAngles) {
-        const compass = bearingToCompass(bearingVal, false);
-        const rawElev = hf.elevationAtCpa != null ? hf.elevationAtCpa : hf.currentElevation;
-        const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-        lookAngles.textContent = `${compass}  ·  ${elev}°  up`;
-      }
-
-      const lookRel = $('#heroLookRelative');
-      if (lookRel) {
-        const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
-        lookRel.textContent = capitalize(rel);
+        const lookRel = $('#heroLookRelative');
+        if (lookRel) {
+          const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
+          lookRel.textContent = capitalize(rel);
+        }
       }
     }
 
@@ -591,8 +594,13 @@ function tickCountdowns() {
       if (!f) return;
 
       const etaEl = row.querySelector('.row-countdown');
-      if (etaEl && f.eta !== null && f.eta > 0) {
-        etaEl.textContent = formatETA(f.eta);
+      if (etaEl) {
+        if (f.passClassification === 'overhead' && f.eta !== null && f.eta > 0) {
+          etaEl.textContent = formatETA(f.eta);
+        } else {
+          // Near flight: show distance / status instead of countdown
+          etaEl.textContent = `${Math.round(f.distance)} km`;
+        }
       }
     });
 
@@ -771,74 +779,127 @@ async function renderFlightList() {
     return;
   }
 
-  const hero = currentFlights[0];
-  const nearby = currentFlights.slice(1);
+  // Partition current flights into overhead and near you
+  const overheadFlights = [];
+  const nearFlights = [];
 
-  const overheadThresh = currentSettings.overheadThresholdKm || 5;
-  const isOverhead = (hero.dCpa != null ? hero.dCpa : hero.distance) <= overheadThresh;
-  const etaText = (hero.eta !== null && hero.eta > 0) ? formatETA(hero.eta) : '01:15';
-  const isUrgent = isOverhead && hero.eta !== null && hero.eta > 0 && hero.eta <= 60;
+  for (const f of currentFlights) {
+    const classification = f.passClassification || classifyPass(f, currentSettings);
+    f.passClassification = classification;
+    if (classification === 'overhead') {
+      overheadFlights.push(f);
+    } else {
+      nearFlights.push(f);
+    }
+  }
 
-  const bearingVal = (typeof hero.bearingAtCpa === 'number' && !isNaN(hero.bearingAtCpa)) ? hero.bearingAtCpa : 0;
-  const compassWord = bearingToCompass(bearingVal, false);
-  const rawElev = hero.elevationAtCpa != null ? hero.elevationAtCpa : hero.currentElevation;
-  const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-  const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
+  // Sort overhead flights:
+  // Hero is soonest overhead flight (lowest valid eta)
+  // For any further overhead flights: sorted by watchlist "special" first, then by ETA
+  overheadFlights.sort((a, b) => {
+    const aEta = (a.eta !== null && a.eta > 0) ? a.eta : 999999;
+    const bEta = (b.eta !== null && b.eta > 0) ? b.eta : 999999;
+    return aEta - bEta;
+  });
 
-  const heroLogo = getAirlineMonogramBadge(hero);
-  const heroVis = getFlightVisibilityInfo(hero);
+  const hero = overheadFlights.length > 0 ? overheadFlights[0] : null;
+  const furtherOverhead = overheadFlights.slice(1);
+  furtherOverhead.sort((a, b) => {
+    const aSpecial = a.alertStyle === 'special' || a.watchlistTag === 'RARE' || a.isWatchlist;
+    const bSpecial = b.alertStyle === 'special' || b.watchlistTag === 'RARE' || b.isWatchlist;
+    if (aSpecial && !bSpecial) return -1;
+    if (!aSpecial && bSpecial) return 1;
+    const aEta = (a.eta !== null && a.eta > 0) ? a.eta : 999999;
+    const bEta = (b.eta !== null && b.eta > 0) ? b.eta : 999999;
+    return aEta - bEta;
+  });
 
-  let html = `
-    <!-- Hero Inbound Block -->
-    <div class="hero-block">
-      <div class="hero-eyebrow mono">${isOverhead ? 'OVERHEAD IN' : 'CLOSEST PASS IN'}</div>
-      <div class="hero-countdown mono ${isUrgent ? 'overhead-urgent' : ''}" id="heroCountdownVal">${etaText}</div>
+  // Sort near flights by current distance
+  nearFlights.sort((a, b) => {
+    const aDist = a.distance != null ? a.distance : 999;
+    const bDist = b.distance != null ? b.distance : 999;
+    return aDist - bDist;
+  });
 
-      <div class="hero-flight-name">
-        ${heroLogo}
-        <span class="airline-white">${esc(formatAirlineName(hero.airline, hero.callsign))}</span>
-        <span class="flight-code-dim">${esc(hero.flightNumber || hero.callsign)}</span>${getWatchlistTagHtml(hero)}
-      </div>
+  let html = '';
 
-      <div class="hero-subline mono">
-        ${esc(hero.origin || 'DEP')} → ${esc(hero.destination || 'ARR')}  ·  ${esc(hero.aircraftType || 'Aircraft')}  ·  ${(hero.altitude || 0).toLocaleString()} ft
-      </div>
+  if (hero) {
+    const etaText = (hero.eta !== null && hero.eta > 0) ? formatETA(hero.eta) : '';
+    const isUrgent = hero.eta !== null && hero.eta > 0 && hero.eta <= 60;
+    const bearingVal = (typeof hero.bearingAtCpa === 'number' && !isNaN(hero.bearingAtCpa)) ? hero.bearingAtCpa : 0;
+    const compassWord = bearingToCompass(bearingVal, false);
+    const rawElev = hero.elevationAtCpa != null ? hero.elevationAtCpa : hero.currentElevation;
+    const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
+    const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
+    const heroLogo = getAirlineMonogramBadge(hero);
+    const heroVis = getFlightVisibilityInfo(hero);
 
-      <!-- Direction Look Widget -->
-      <div class="hero-look-widget">
-        <div class="compass-dial">
-          <div class="compass-tick tick-n"></div>
-          <div class="compass-tick tick-e"></div>
-          <div class="compass-tick tick-s"></div>
-          <div class="compass-tick tick-w"></div>
-          <div class="compass-needle-arm" id="heroCompassNeedle" style="transform: rotate(${bearingVal}deg);">
-            <div class="needle-tip-dot"></div>
-            <div class="needle-line"></div>
-            <div class="needle-pivot-dot"></div>
+    html += `
+      <!-- Hero Inbound Block -->
+      <div class="hero-block" data-hero-id="${hero.id}">
+        <div class="hero-eyebrow mono">OVERHEAD IN</div>
+        <div class="hero-countdown mono ${isUrgent ? 'overhead-urgent' : ''}" id="heroCountdownVal">${etaText}</div>
+
+        <div class="hero-flight-name">
+          ${heroLogo}
+          <span class="airline-white">${esc(formatAirlineName(hero.airline, hero.callsign))}</span>
+          <span class="flight-code-dim">${esc(hero.flightNumber || hero.callsign)}</span>${getWatchlistTagHtml(hero)}
+        </div>
+
+        <div class="hero-subline mono">
+          ${esc(hero.origin || 'DEP')} → ${esc(hero.destination || 'ARR')}  ·  ${esc(hero.aircraftType || 'Aircraft')}  ·  ${(hero.altitude || 0).toLocaleString()} ft
+        </div>
+
+        <!-- Direction Look Widget -->
+        <div class="hero-look-widget">
+          <div class="compass-dial">
+            <div class="compass-tick tick-n"></div>
+            <div class="compass-tick tick-e"></div>
+            <div class="compass-tick tick-s"></div>
+            <div class="compass-tick tick-w"></div>
+            <div class="compass-needle-arm" id="heroCompassNeedle" style="transform: rotate(${bearingVal}deg);">
+              <div class="needle-tip-dot"></div>
+              <div class="needle-line"></div>
+              <div class="needle-pivot-dot"></div>
+            </div>
+          </div>
+
+          <div class="look-meta-block">
+            <div class="look-label mono">LOOK</div>
+            <div class="look-angle-main mono" id="heroLookAngles">${compassWord}  ·  ${elev}°  up</div>
+            <div class="look-relative-sub" id="heroLookRelative">${capitalize(rel)}</div>
           </div>
         </div>
 
-        <div class="look-meta-block">
-          <div class="look-label mono">LOOK</div>
-          <div class="look-angle-main mono" id="heroLookAngles">${compassWord}  ·  ${elev}°  up</div>
-          <div class="look-relative-sub" id="heroLookRelative">${capitalize(rel)}</div>
+        <!-- Optical Visibility Hint -->
+        <div class="hero-visibility-hint mono">
+          <span class="vis-indicator ${heroVis.contrast}"></span>
+          <span class="vis-hint-text">${esc(heroVis.hint)}</span>
         </div>
       </div>
+    `;
 
-      <!-- Optical Visibility Hint -->
-      <div class="hero-visibility-hint mono">
-        <span class="vis-indicator ${heroVis.contrast}"></span>
-        <span class="vis-hint-text">${esc(heroVis.hint)}</span>
-      </div>
-    </div>
-  `;
-
-  if (nearby.length > 0) {
+    if (furtherOverhead.length > 0) {
+      html += `
+        <div class="live-section-title mono">OVERHEAD</div>
+        <div class="overhead-rows-list">
+          ${furtherOverhead.map(f => buildOverheadFlightRowHtml(f)).join('')}
+        </div>
+      `;
+    }
+  } else {
+    // If nothing is overhead, show no hero. Show a calm line "No overhead pass expected"
     html += `
-      <!-- ALSO NEARBY Section -->
-      <div class="nearby-section-title mono">ALSO NEARBY</div>
+      <div class="calm-overhead-line mono">No overhead pass expected</div>
+    `;
+  }
+
+  // Section NEAR YOU: neutral styling, sorted by current distance
+  if (nearFlights.length > 0) {
+    html += `
+      <div class="live-section-title mono">NEAR YOU</div>
       <div class="nearby-rows-list">
-        ${nearby.map(f => buildNearbyRowHtml(f)).join('')}
+        ${nearFlights.map(f => buildNearFlightRowHtml(f)).join('')}
       </div>
     `;
   }
@@ -878,13 +939,13 @@ function getFlightVisibilityInfo(f) {
   };
 }
 
-function buildNearbyRowHtml(f) {
+function buildOverheadFlightRowHtml(f) {
   const isExpanded = expandedFlightId === String(f.id);
   const etaText = (f.eta !== null && f.eta > 0) ? formatETA(f.eta) : '—';
-  const distKm = Math.round(f.dCpa != null ? f.dCpa : (f.distance || 0));
-  const dir = getDirectionWord(f.bearingAtCpa || 0);
   const logo = getAirlineMonogramBadge(f);
   const vis = getFlightVisibilityInfo(f);
+  const dir = getDirectionWord(f.bearingAtCpa || 0);
+  const distKm = Math.round(f.dCpa != null ? f.dCpa : (f.distance || 0));
 
   return `
     <div class="flight-row-item ${isExpanded ? 'expanded' : ''}" data-id="${f.id}">
@@ -897,7 +958,7 @@ function buildNearbyRowHtml(f) {
           </div>
         </div>
         <div class="row-right-meta">
-          <span class="row-countdown mono">${etaText}</span>
+          <span class="row-countdown mono overhead-accent">${etaText}</span>
           <span class="row-chevron">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
@@ -906,7 +967,7 @@ function buildNearbyRowHtml(f) {
         </div>
       </div>
       <div class="row-subline mono">
-        ${esc(f.aircraftType || 'Aircraft')}  ·  passes ${distKm} km ${dir}
+        ${esc(f.aircraftType || 'Aircraft')}  ·  ${distKm} km ${dir}
       </div>
 
       <!-- Expandable Telemetry Drawer -->
@@ -925,7 +986,82 @@ function buildNearbyRowHtml(f) {
         </div>
         <div class="detail-cell">
           <span class="detail-k mono">PASS</span>
-          <span class="detail-v mono">${f.passesOverhead ? 'Overhead' : 'Nearby'}</span>
+          <span class="detail-v mono">Overhead</span>
+        </div>
+        <div class="detail-visibility-bar mono">
+          <span class="vis-indicator ${vis.contrast}"></span>
+          <span>VISIBILITY: ${esc(vis.hint)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function formatNearFlightStatus(f) {
+  // If moving away or passed
+  if (!f.isInbound || (f.tCpa != null && f.tCpa <= 0)) {
+    return 'Moving away';
+  }
+
+  // If inbound with valid ETA
+  if (f.eta !== null && f.eta > 0) {
+    const cpaDist = Math.round(f.dCpa != null ? f.dCpa : f.distance);
+    const dir = getDirectionWord(f.bearingAtCpa || 0);
+    const etaStr = formatETA(f.eta);
+    return `Closest ${cpaDist} km ${dir} in ${etaStr}`;
+  }
+
+  // Stationary / no ETA
+  return `${Math.round(f.distance || 0)} km away`;
+}
+
+function buildNearFlightRowHtml(f) {
+  const isExpanded = expandedFlightId === String(f.id);
+  const statusText = formatNearFlightStatus(f);
+  const logo = getAirlineMonogramBadge(f, { neutral: true });
+  const vis = getFlightVisibilityInfo(f);
+  const currentDist = Math.round(f.distance != null ? f.distance : 0);
+
+  return `
+    <div class="flight-row-item near-flight ${isExpanded ? 'expanded' : ''}" data-id="${f.id}">
+      <div class="row-top-line">
+        <div class="row-left-identity">
+          ${logo}
+          <div class="row-names">
+            <span class="row-airline">${esc(formatAirlineName(f.airline, f.callsign))}</span>
+            <span class="row-code">${esc(f.flightNumber || f.callsign)}</span>${getWatchlistTagHtml(f, { neutral: true })}
+          </div>
+        </div>
+        <div class="row-right-meta">
+          <span class="row-distance mono">${currentDist} km</span>
+          <span class="row-chevron">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+      <div class="row-subline mono">
+        ${esc(f.aircraftType || 'Aircraft')}  ·  ${statusText}
+      </div>
+
+      <!-- Expandable Telemetry Drawer -->
+      <div class="flight-inline-details">
+        <div class="detail-cell">
+          <span class="detail-k mono">ALTITUDE</span>
+          <span class="detail-v mono">${(f.altitude || 0).toLocaleString()} ft</span>
+        </div>
+        <div class="detail-cell">
+          <span class="detail-k mono">SPEED</span>
+          <span class="detail-v mono">${f.speed || 0} kt</span>
+        </div>
+        <div class="detail-cell">
+          <span class="detail-k mono">LOOK</span>
+          <span class="detail-v mono">${bearingToCompass(f.bearingAtCpa || f.currentBearing || 0, false)} · ${Math.round(f.elevationAtCpa || f.currentElevation || 0)}°</span>
+        </div>
+        <div class="detail-cell">
+          <span class="detail-k mono">PASS</span>
+          <span class="detail-v mono">Near</span>
         </div>
         <div class="detail-visibility-bar mono">
           <span class="vis-indicator ${vis.contrast}"></span>
@@ -1970,17 +2106,19 @@ function saveRuleFromEditor() {
 }
 
 
-function getWatchlistTagHtml(flight) {
+function getWatchlistTagHtml(flight, options = {}) {
   if (!flight) return '';
   const badges = [];
+  const isNeutral = Boolean(options.neutral);
 
   if (flight.isNew) {
-    badges.push(`<span class="badge-watchlist mono new" title="First time seen: ${esc(flight.newLabel || flight.registration || '')}">NEW</span>`);
+    badges.push(`<span class="badge-watchlist mono ${isNeutral ? 'neutral' : 'new'}" title="First time seen: ${esc(flight.newLabel || flight.registration || '')}">NEW</span>`);
   }
 
   if (flight.watchlistTag) {
     const isRare = flight.watchlistTag === 'RARE';
-    badges.push(`<span class="badge-watchlist mono ${isRare ? 'rare' : 'watch'}">${flight.watchlistTag}</span>`);
+    const tagClass = isNeutral ? 'neutral' : (isRare ? 'rare' : 'watch');
+    badges.push(`<span class="badge-watchlist mono ${tagClass}">${flight.watchlistTag}</span>`);
   } else {
     // Check dynamically if matches any rule
     const rules = currentSettings.watchlistRules || [];
@@ -1992,10 +2130,11 @@ function getWatchlistTagHtml(flight) {
       });
       if (match) {
         const isRare = match.tag === 'RARE';
-        badges.push(`<span class="badge-watchlist mono ${isRare ? 'rare' : 'watch'}">${match.tag}</span>`);
+        const tagClass = isNeutral ? 'neutral' : (isRare ? 'rare' : 'watch');
+        badges.push(`<span class="badge-watchlist mono ${tagClass}">${match.tag}</span>`);
       }
     } else if (flight.aircraftType && isInherentlyRare(flight.aircraftType)) {
-      badges.push(`<span class="badge-watchlist mono rare">RARE</span>`);
+      badges.push(`<span class="badge-watchlist mono ${isNeutral ? 'neutral' : 'rare'}">RARE</span>`);
     }
   }
 

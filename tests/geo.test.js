@@ -13,7 +13,8 @@ import {
   bearingToCompass,
   parseFacingDirection,
   getRelativeDirection,
-  formatLookDirection
+  formatLookDirection,
+  classifyPass
 } from '../lib/geo.js';
 
 let passed = 0;
@@ -205,6 +206,65 @@ console.log('\n--- 7. Compass & Look Direction Helpers ---');
 
   const fmtAhead = formatLookDirection(0, 52.2, 'N');
   assert(fmtAhead === 'Look N (straight ahead), 52° up', `Format ahead: "${fmtAhead}"`);
+}
+
+console.log('\n--- 8. Pass Classification (Overhead vs Near) ---');
+{
+  const defaultSettings = { overheadThresholdKm: 5, minElevationDeg: 15 };
+
+  // 1. Direct overhead: inbound, CPA 0.5 km, high elevation 75°
+  const directOverheadFlight = {
+    isInbound: true,
+    tCpa: 90,
+    dCpa: 0.5,
+    elevationAtCpa: 75
+  };
+  assert(classifyPass(directOverheadFlight, defaultSettings) === 'overhead', 'Direct overhead flight classified as overhead');
+
+  // 2. CPA 20 km: inbound, but CPA 20 km > threshold 5 km
+  const farPassFlight = {
+    isInbound: true,
+    tCpa: 80,
+    dCpa: 20,
+    elevationAtCpa: 25
+  };
+  assert(classifyPass(farPassFlight, defaultSettings) === 'near', 'CPA 20 km classified as near');
+
+  // 3. CPA 4.9 km but elevation below minimum (12° < 15°)
+  const lowElevationFlight = {
+    isInbound: true,
+    tCpa: 100,
+    dCpa: 4.9,
+    elevationAtCpa: 12
+  };
+  assert(classifyPass(lowElevationFlight, defaultSettings) === 'near', 'CPA 4.9 km with elevation 12° (<15°) classified as near');
+
+  // 4. Moving away (outbound / past CPA: tCpa <= 0 or isInbound false)
+  const outboundFlight = {
+    isInbound: false,
+    tCpa: -30,
+    dCpa: 1.2,
+    elevationAtCpa: 60
+  };
+  assert(classifyPass(outboundFlight, defaultSettings) === 'near', 'Outbound / past flight classified as near');
+
+  // 5. Stationary / on ground (tCpa 0 or groundspeed < 5)
+  const stationaryFlight = {
+    isInbound: false,
+    tCpa: 0,
+    dCpa: 0.1,
+    elevationAtCpa: 85
+  };
+  assert(classifyPass(stationaryFlight, defaultSettings) === 'near', 'Stationary flight classified as near');
+
+  // 6. Missing speed / missing ETA
+  const missingSpeedFlight = {
+    dCpa: 1.0,
+    elevationAtCpa: 50,
+    eta: null,
+    tCpa: null
+  };
+  assert(classifyPass(missingSpeedFlight, defaultSettings) === 'near', 'Flight with missing speed/ETA classified as near');
 }
 
 console.log(`\n========================================`);

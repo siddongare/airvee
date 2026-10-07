@@ -20,7 +20,7 @@ I live in Central India, which sits under busy long-haul routes. A lot of Ethiop
 I built it with AI coding tools and then tested, reviewed and reshaped it myself. The geometry is documented in [docs/geometry.md](docs/geometry.md) so you can check the maths rather than take my word for it.
 
 ## What it does
-- **Overhead prediction.** From each aircraft's position, speed and heading it estimates when and how close the aircraft will pass you. A flight counts as overhead only if the predicted pass is within your threshold (5 km by default), so a plane that comes within range but veers away does not trigger an alert.
+- **Overhead vs. near-you separation.** From each aircraft's position, speed and heading, Airvee calculates its predicted closest point of approach (CPA). A flight is classified as **overhead** only when it is strictly inbound, passes within your overhead threshold (default 5 km), and achieves an elevation angle above the horizon (default ≥15°). Only overhead flights trigger notifications, chimes, live countdowns, and accent styling. All other aircraft inside your detection radius appear under **Near you** with neutral styling and status (e.g. "Closest 14 km east in 2:10" or "Moving away") without alerting.
 - **Look direction.** The compass direction and elevation angle to look at, relative to the direction you face.
 - **Radar view.** A canvas radar centred on you with range rings, plane trails and your facing direction.
 - **Watchlist.** Alert rules by aircraft type, airline, registration, callsign prefix, or cargo and passenger flights, plus a "rare for me" rule based on your own log. Each rule can use its own alert style.

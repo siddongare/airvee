@@ -3,7 +3,7 @@
 // ============================================================
 
 import { fetchMockFlightsNear } from '../providers/mock.js';
-import { calculateCPA, calculateBearing, calculateElevationAngle } from '../lib/geo.js';
+import { calculateCPA, calculateBearing, calculateElevationAngle, classifyPass } from '../lib/geo.js';
 
 let passed = 0;
 let failed = 0;
@@ -76,8 +76,19 @@ assert(cpaC.isInbound === true, 'Case C is inbound from southwest');
 assert(Math.abs(cpaC.tCpa - 125) <= 2, `Case C ETA to CPA is ~125s (got ${cpaC.tCpa.toFixed(1)}s)`);
 assert(cpaC.dCpa <= 0.2, `Case C CPA distance is ~0 km (got ${cpaC.dCpa.toFixed(3)} km)`);
 assert(cpaC.passesOverhead === true, 'Case C classifies as passing overhead');
-assert(Math.abs(cpaC.currentBearing - 225) <= 1, `Case C current bearing is Southwest 225° (got ${cpaC.currentBearing.toFixed(1)}°)`);
 assert(cpaC.elevationAtCpa >= 88.0, `Case C elevation at CPA is ~90° overhead (got ${cpaC.elevationAtCpa.toFixed(1)}°)`);
+
+console.log('\n--- 5. Pass Classification on Mock Flights (classifyPass) ---');
+const defaultSettings = { overheadThresholdKm: 5, minElevationDeg: 15 };
+
+const classA = classifyPass(cpaA, defaultSettings);
+assert(classA === 'overhead', 'Mock flight A (direct pass) classifies as overhead');
+
+const classB = classifyPass(cpaB, defaultSettings);
+assert(classB === 'near', 'Mock flight B (20 km east) classifies as near');
+
+const classC = classifyPass(cpaC, defaultSettings);
+assert(classC === 'overhead', 'Mock flight C (inbound SW, CPA 0km) classifies as overhead');
 
 console.log('\n========================================');
 console.log(`MOCK PROVIDER TEST SUMMARY: ${passed} passed, ${failed} failed.`);

@@ -10,7 +10,8 @@ import {
   calculateElevationAngle,
   calculateCPA,
   deadReckonPosition,
-  formatLookDirection
+  formatLookDirection,
+  classifyPass
 } from './lib/geo.js';
 import { isQuietHours, getCalendarDayKey } from './lib/audio.js';
 import { logFlightPass, cacheCallsignRoute, resolveRouteFromCache, getSightingCounts, checkIsFirstTimeSeen, openDB } from './lib/db.js';
@@ -516,6 +517,12 @@ async function pollFlights() {
       currentElevation: Math.round(cpa.currentElevation),
       passesOverhead: cpa.passesOverhead,
       isInbound: cpa.isInbound,
+      passClassification: classifyPass({
+        tCpa: cpa.tCpa,
+        dCpa: cpa.dCpa,
+        elevationAtCpa: cpa.elevationAtCpa,
+        isInbound: cpa.isInbound
+      }, settings),
       lookDirection,
       visibilityHint: visibility.hint,
       visibilityRegime: visibility.regime,
@@ -595,17 +602,23 @@ async function pollFlights() {
 
   // ---- Send Notifications & Log Overhead Passes ----
   const quietHoursActive = isQuietHours(settings);
+  let bestChime = null; // { alertStyle, ignoreQuiet }
 
   for (const flight of processed) {
+    const isOverhead = flight.passClassification === 'overhead';
+
     // Log any flight that is passing or has passed within user threshold (IndexedDB deduplicates by day)
     // IMPORTANT: Mock flights are strictly excluded from the real flight log
     if (!flight.isMock && flight.source !== 'mock' && !settings.mockProviderEnabled) {
-      if (flight.passesOverhead || (flight.distance <= radiusKm && flight.minDist <= radiusKm)) {
+      if (isOverhead || flight.passesOverhead || (flight.distance <= radiusKm && flight.minDist <= radiusKm)) {
         logFlightPass(flight).catch(err => {
           console.warn('Airvee: Failed to log overhead flight:', err);
         });
       }
     }
+
+    // Alerts apply ONLY to flights classified as "overhead"
+    if (!isOverhead) continue;
 
     if (flight.eta === null || flight.eta <= 0) continue;
     if (flight.eta < ETA_MIN_S || flight.eta > ETA_MAX_S) continue;
@@ -651,7 +664,7 @@ async function pollFlights() {
         ignoreQuiet = Boolean(watchlistMatch.ignoreQuietHours);
         alertTag = watchlistMatch.tag;
       }
-    } else if (flight.passesOverhead) {
+    } else {
       shouldAlert = true;
       alertStyle = 'normal';
     }
@@ -709,13 +722,17 @@ async function pollFlights() {
 
     await markNotifiedToday(flight.id);
 
-    // Play chime sound only if sound enabled AND (not in quiet hours OR ignoreQuiet)
-    if (settings.soundEnabled && (!quietHoursActive || ignoreQuiet)) {
-      const vol = settings.chimeVolume != null ? settings.chimeVolume : 80;
-      await playChime(vol, alertStyle);
+    // Track highest-priority chime for this poll cycle (special > normal)
+    if (!bestChime || alertStyle === 'special') {
+      bestChime = { alertStyle, ignoreQuiet };
     }
   }
 
+  // Play exactly one chime per poll cycle for the highest-priority overhead flight
+  if (bestChime && settings.soundEnabled && (!quietHoursActive || bestChime.ignoreQuiet)) {
+    const vol = settings.chimeVolume != null ? settings.chimeVolume : 80;
+    await playChime(vol, bestChime.alertStyle);
+  }
 }
 
 /**
