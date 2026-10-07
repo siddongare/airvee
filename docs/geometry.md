@@ -6,7 +6,7 @@ Airvee is engineered as a high-performance, zero-backend, privacy-sovereign Chro
 
 ## 📐 1. Kinematic Geometry & Closest Point of Approach (CPA)
 
-Airvee does not simply calculate current distance; it projects future aircraft trajectories to alert users *before* an aircraft reaches their overhead zenith.
+Airvee does not simply calculate current distance; it projects future aircraft trajectories to alert users *before* an aircraft reaches its point of closest approach.
 
 ### 1.1 Earth Curvature & Haversine Distance
 The spherical distance $d$ between observer $(\phi_1, \lambda_1)$ and aircraft $(\phi_2, \lambda_2)$ is calculated using the Haversine formulation:

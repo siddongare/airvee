@@ -13,5 +13,5 @@ All notable changes to Airvee are documented here.
 - Learned schedule clustering and 24h x 7-day traffic density heatmap with heartbeat gap tracking.
 - Local solar position calculation (NOAA algorithm) and optical sky visibility hints.
 - Opt-in aircraft photo display via Planespotters.net API with persistent local caching.
-- Cockpit Minimal design language with dark theme and prefers-reduced-motion support.
-- Fully local and privacy-sovereign architecture with zero remote servers and zero telemetry.
+- Dark theme interface with prefers-reduced-motion support.
+- Fully local architecture with no remote servers and no telemetry.
