@@ -5,19 +5,14 @@
 import { RadarScope } from './lib/radar.js';
 import { formatLookDirection } from './lib/geo.js';
 import { evaluateAircraft } from './lib/filter.js';
+import { DEFAULTS, migrateSettings } from './lib/settings-defaults.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 let radarScope = null;
 let currentFlights = [];
-let currentSettings = {
-  latitude: 21.1458,
-  longitude: 79.0882,
-  radiusKm: 15,
-  flightFilter: 'international',
-  userFacing: ''
-};
+let currentSettings = { ...DEFAULTS };
 
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
@@ -30,16 +25,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSettings() {
   try {
     const { settings } = await chrome.storage.local.get('settings');
-    if (settings) {
-      currentSettings = { ...currentSettings, ...settings };
-      const locEl = $('#stationLocation');
-      if (locEl) {
-        locEl.textContent = `${settings.latitude.toFixed(4)}° N, ${settings.longitude.toFixed(4)}° E`;
-      }
-      const radEl = $('#fullRadiusTag');
-      if (radEl) {
-        radEl.textContent = `${settings.radiusKm} km Scope`;
-      }
+    currentSettings = migrateSettings(settings);
+    const locEl = $('#stationLocation');
+    if (locEl) {
+      locEl.textContent = `${currentSettings.latitude.toFixed(4)}° N, ${currentSettings.longitude.toFixed(4)}° E`;
+    }
+    const radEl = $('#fullRadiusTag');
+    if (radEl) {
+      radEl.textContent = `${currentSettings.radiusKm} km Scope`;
     }
   } catch (e) {}
 }

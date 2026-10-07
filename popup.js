@@ -40,72 +40,16 @@ import {
   migrateDiagnosticsStorage
 } from './lib/diagnostics.js';
 import { evaluateAircraft } from './lib/filter.js';
+import {
+  DEFAULTS,
+  migrateSettings,
+  SCHEMA_VERSION
+} from './lib/settings-defaults.js';
+
+export { migrateSettings, DEFAULTS, SCHEMA_VERSION };
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
-
-const DEFAULTS = {
-  schemaVersion: 5,
-  latitude: 21.1458,
-  longitude: 79.0882,
-  groundElevationM: 310,
-  radiusKm: 30,
-  overheadThresholdKm: 5,
-  alertsEnabled: true,
-  soundEnabled: true,
-  flightFilter: 'all',
-  userFacing: 'S',
-  chimeVolume: 80,
-  minElevationDeg: 15,
-  quietHoursEnabled: false,
-  quietHoursStart: '23:00',
-  quietHoursEnd: '07:00',
-  unitDistance: 'km',
-  unitSpeed: 'kt',
-  unitAltitude: 'ft',
-  mockProviderEnabled: false,
-  diagnosticsEnabled: false,
-  rareSeenThreshold: 2,
-  watchlistRules: [],
-  showAircraftPhotos: false,
-  radarOrientation: 'facing_up'
-};
-
-export function migrateSettings(rawSettings) {
-  if (!rawSettings) return { ...DEFAULTS };
-  const v = rawSettings.schemaVersion || 1;
-  const migrated = { ...rawSettings };
-  if (v < 2) {
-    migrated.schemaVersion = 2;
-    if (migrated.unitDistance === undefined) migrated.unitDistance = 'km';
-    if (migrated.unitSpeed === undefined) migrated.unitSpeed = 'kt';
-    if (migrated.unitAltitude === undefined) migrated.unitAltitude = 'ft';
-    if (migrated.groundElevationM === undefined) migrated.groundElevationM = 310;
-  }
-  if (v < 3) {
-    if (migrated.overheadThresholdKm === undefined) {
-      migrated.overheadThresholdKm = 5;
-    }
-  }
-  if (v < 4) {
-    if (migrated.rareSeenThreshold === undefined) migrated.rareSeenThreshold = 2;
-    if (migrated.watchlistRules === undefined) migrated.watchlistRules = [];
-  }
-  if (v < 5) {
-    if (migrated.showAircraftPhotos === undefined) migrated.showAircraftPhotos = false;
-  }
-  if (migrated.mockProviderEnabled === undefined) {
-    migrated.mockProviderEnabled = false;
-  }
-  if (migrated.diagnosticsEnabled === undefined) {
-    migrated.diagnosticsEnabled = false;
-  }
-  if (migrated.radarOrientation === undefined) {
-    migrated.radarOrientation = 'facing_up';
-  }
-  migrated.schemaVersion = 5;
-  return { ...DEFAULTS, ...migrated };
-}
 
 let currentSettings = { ...DEFAULTS };
 let currentFlights = [];

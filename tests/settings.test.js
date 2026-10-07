@@ -33,6 +33,12 @@ globalThis.chrome = {
   }
 };
 
+globalThis.document = {
+  addEventListener: () => {},
+  querySelector: () => null,
+  querySelectorAll: () => []
+};
+
 const { migrateSettings, calculatePeakTraffic } = await import('../background.js');
 
 let passed = 0;
@@ -85,14 +91,39 @@ assert(Array.isArray(migrated.watchlistRules), 'Default watchlistRules array ini
 assert(migrated.showAircraftPhotos === false, 'Default showAircraftPhotos initialized to false');
 assert(migrated.radarOrientation === 'facing_up', 'Default radarOrientation initialized to facing_up');
 
-console.log('\n--- 2. Settings Migration Handles Null/Undefined ---');
+console.log('\n--- 2. Settings Migration Handles Null/Undefined & Unified Defaults ---');
 const emptyMigrated = migrateSettings(null);
 assert(emptyMigrated.schemaVersion === 5, 'Null raw settings returns schema v5 defaults');
 assert(emptyMigrated.showAircraftPhotos === false, 'Default showAircraftPhotos is false on null');
 assert(emptyMigrated.radarOrientation === 'facing_up', 'Default radarOrientation is facing_up on null');
 assert(emptyMigrated.latitude === 21.1458, 'Default latitude returned');
+assert(emptyMigrated.radiusKm === 30, 'Default radiusKm is 30 on fresh install');
+assert(emptyMigrated.flightFilter === 'all', 'Default flightFilter is all on fresh install');
+assert(emptyMigrated.userFacing === 'S', 'Default userFacing is S on fresh install');
 
-console.log('\n--- 3. Peak Simultaneous Traffic Stat ---');
+console.log('\n--- 3. Preserves Existing User Settings ---');
+const savedUserSettings = {
+  schemaVersion: 5,
+  latitude: 19.0760,
+  longitude: 72.8777,
+  radiusKm: 15,
+  flightFilter: 'international',
+  userFacing: 'NW'
+};
+const migratedSaved = migrateSettings(savedUserSettings);
+assert(migratedSaved.radiusKm === 15, 'Existing saved radiusKm of 15 is strictly preserved');
+assert(migratedSaved.flightFilter === 'international', 'Existing saved flightFilter of international is strictly preserved');
+assert(migratedSaved.userFacing === 'NW', 'Existing saved userFacing is strictly preserved');
+assert(migratedSaved.latitude === 19.0760, 'Existing saved latitude is strictly preserved');
+
+console.log('\n--- 4. All Contexts Share Identical Defaults ---');
+const defaultsFromLib = (await import('../lib/settings-defaults.js')).DEFAULTS;
+const defaultsFromBg = (await import('../background.js')).DEFAULTS;
+const defaultsFromPopup = (await import('../popup.js')).DEFAULTS;
+assert(JSON.stringify(defaultsFromBg) === JSON.stringify(defaultsFromLib), 'Background defaults match lib/settings-defaults.js');
+assert(JSON.stringify(defaultsFromPopup) === JSON.stringify(defaultsFromLib), 'Popup defaults match lib/settings-defaults.js');
+
+console.log('\n--- 5. Peak Simultaneous Traffic Stat ---');
 const testFlights = [
   { id: 'f1', distance: 8.5 },
   { id: 'f2', distance: 14.0 },

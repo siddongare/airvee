@@ -2,6 +2,13 @@
 
 All notable changes to Airvee are documented here.
 
+## [Unreleased]
+
+### Changed
+- Consolidated default settings into `lib/settings-defaults.js` as the single source of truth across service worker, popup UI, and radar.
+- Set unified default detection radius to 30 km and default flight filter to 'all' across the entire extension.
+- Ensured migration strictly preserves existing user-configured settings.
+
 ## [1.0.0] - 2026-10-06
 
 ### Initial Release
