@@ -37,7 +37,7 @@ Any proposed pull request must adhere strictly to these principles:
 
 3. **Run Unit Tests & Syntax Verification**:
    ```bash
-   npm test       # Run all 58 unit tests
+   npm test       # Run all 59 unit tests
    npm run check  # Validate syntax and run test suite
    npm run ci     # Run full verification pipeline
    ```

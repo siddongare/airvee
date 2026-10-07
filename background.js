@@ -878,11 +878,11 @@ chrome.notifications.onClicked.addListener((notificationId) => {
     let url = 'https://www.flightradar24.com';
     if (callsign) {
       if (source === 'fr24') {
-        url = `https://www.flightradar24.com/${callsign}`;
+        url = `https://www.flightradar24.com/${encodeURIComponent(callsign)}`;
       } else if (source === 'adsb_lol' || source === 'adsblol') {
-        url = `https://globe.adsb.lol/?callsign=${callsign}`;
+        url = `https://globe.adsb.lol/?callsign=${encodeURIComponent(callsign)}`;
       } else {
-        url = `https://www.flightradar24.com/${callsign}`;
+        url = `https://www.flightradar24.com/${encodeURIComponent(callsign)}`;
       }
     }
 

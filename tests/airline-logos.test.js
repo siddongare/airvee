@@ -9,7 +9,8 @@ import {
   resolveAirlineKey,
   getAirlineMonogramBadge,
   getAirlineLogoHtml,
-  formatNotificationAirline
+  formatNotificationAirline,
+  buildFlightTrackingUrl
 } from '../lib/airline-logos.js';
 
 test('Airline Monogram: Known major airlines resolve to proper 2-letter IATA codes', () => {
@@ -142,4 +143,28 @@ test('Backwards-Compatibility: getAirlineLogoHtml and resolveAirlineKey work ide
   const badge = getAirlineLogoHtml('UAE394', 'Emirates');
   assert.ok(badge.includes('airline-monogram-badge'));
   assert.ok(badge.includes('>EK<'));
+});
+
+test('Notification Link: Callsign containing "?", "&", "#", and "/" cannot alter URL host or inject query parameters', () => {
+  const maliciousCallsign = 'ATTACKER/TEST?admin=true&evil=1#fragment';
+
+  // Flightradar24 URL
+  const fr24Url = buildFlightTrackingUrl(maliciousCallsign, 'fr24');
+  const parsedFr24 = new URL(fr24Url);
+  assert.equal(parsedFr24.origin, 'https://www.flightradar24.com');
+  assert.equal(parsedFr24.host, 'www.flightradar24.com');
+  assert.equal(parsedFr24.search, '', 'FR24 URL must have no query parameters');
+  assert.equal(parsedFr24.hash, '', 'FR24 URL must have no hash anchor');
+  assert.equal(parsedFr24.pathname, `/${encodeURIComponent(maliciousCallsign)}`);
+
+  // adsb.lol URL
+  const adsbUrl = buildFlightTrackingUrl(maliciousCallsign, 'adsb_lol');
+  const parsedAdsb = new URL(adsbUrl);
+  assert.equal(parsedAdsb.origin, 'https://globe.adsb.lol');
+  assert.equal(parsedAdsb.host, 'globe.adsb.lol');
+  assert.equal(parsedAdsb.hash, '', 'adsb.lol URL must have no hash anchor');
+  assert.equal(parsedAdsb.searchParams.get('callsign'), maliciousCallsign);
+  assert.equal(parsedAdsb.searchParams.get('admin'), null, 'Cannot inject admin query parameter');
+  assert.equal(parsedAdsb.searchParams.get('evil'), null, 'Cannot inject evil query parameter');
+  assert.equal([...parsedAdsb.searchParams.keys()].length, 1, 'Only callsign parameter exists');
 });

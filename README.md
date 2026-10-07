@@ -35,7 +35,7 @@ I built it with AI coding tools and then tested, reviewed and reshaped it myself
 To test without live flights, click the version tag in Settings 5 times to turn on simulated mock flights.
 
 ## Develop
-- `npm test` runs the test suite (58 passing tests).
+- `npm test` runs the test suite (59 passing tests).
 - `npm run check` runs a syntax check and the tests.
 
 ## Data and privacy
