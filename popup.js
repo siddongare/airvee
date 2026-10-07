@@ -1818,14 +1818,14 @@ export async function switchTab(tabName) {
     settings: $('#viewSettings')
   };
 
-  $('#viewAlerts')?.classList.remove('active');
-  $('#viewAddRuleStep1')?.classList.remove('active');
-  $('#viewAddRuleStep2')?.classList.remove('active');
-  $('#viewAddRuleStep3')?.classList.remove('active');
-
-  Object.entries(views).forEach(([name, el]) => {
-    if (el) el.classList.toggle('active', name === tabName);
+  $$('.view-container').forEach(el => {
+    el.classList.remove('active');
+    el.style.display = '';
   });
+
+  if (views[tabName]) {
+    views[tabName].classList.add('active');
+  }
 
   try {
     if (tabName === 'radar') {
@@ -2045,8 +2045,15 @@ let draftRule = {
 };
 
 function showSubView(viewId) {
-  $$('.view-container').forEach(el => el.classList.remove('active'));
-  $(`#${viewId}`)?.classList.add('active');
+  $$('.view-container').forEach(el => {
+    el.classList.remove('active');
+    el.style.display = '';
+  });
+  const target = $(`#${viewId}`);
+  if (target) {
+    target.style.display = '';
+    target.classList.add('active');
+  }
 }
 
 function openAlertsScreen() {
