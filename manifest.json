@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Airvee — Flight Radar",
+  "version": "1.0.0",
+  "description": "Overhead international flight tracking radar. Get alerted before planes fly over you.",
+  "permissions": [
+    "alarms",
+    "notifications",
+    "storage",
+    "unlimitedStorage",
+    "offscreen",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://data-cloud.flightradar24.com/*",
+    "https://opensky-network.org/*",
+    "https://ipwho.is/*",
+    "https://ipapi.co/*",
+    "https://api.open-meteo.com/*",
+    "https://api.planespotters.net/*",
+    "https://*.plnspttrs.net/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Airvee — Flight Radar",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

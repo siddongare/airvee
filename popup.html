@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airvee — Flight Radar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ====== Fixed Cockpit Header (48px) ====== -->
+    <header class="nav-bar" id="cockpitHeader">
+      <div class="header-left" id="headerLeft">
+        <img class="header-app-logo" src="airvee-logo-preview.png" alt="Airvee Logo" />
+        <span class="header-brand mono" id="headerTitle">AIRVEE</span>
+      </div>
+      <div class="header-right" id="headerRight">
+        <div class="status-indicator" id="statusBadge">
+          <span class="status-dot"></span>
+          <span class="status-text mono" id="sourceStatus">FR24 · 15 S</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ====== Mock Data Warning Banner ====== -->
+    <div class="mock-data-banner" id="mockDataBanner" style="display: none;">
+      <div class="mock-banner-left">
+        <span class="mock-banner-pulse"></span>
+        <span class="mock-banner-title mono">MOCK DATA ACTIVE</span>
+      </div>
+      <button class="btn-disable-mock mono" id="btnDisableMock">Disable</button>
+    </div>
+
+    <!-- ============================================================
+         SCREEN 1: LIVE
+         ============================================================ -->
+    <div class="view-container active" id="viewLive">
+      <div class="live-scroll-area" id="flightList">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN 2: RADAR
+         ============================================================ -->
+    <div class="view-container" id="viewRadar">
+      <div class="radar-scope-wrapper">
+        <div class="radar-canvas-container">
+          <canvas id="radarCanvas" width="320" height="320"></canvas>
+        </div>
+
+        <!-- Inline Legend with Interactive Orientation Toggle Button -->
+        <div class="radar-inline-legend mono">
+          <div class="legend-entry">
+            <span class="legend-dot inbound-dot"></span>
+            <span class="legend-text-inbound">INBOUND</span>
+          </div>
+          <div class="legend-entry">
+            <span class="legend-dot traffic-dot"></span>
+            <span class="legend-text-traffic">TRAFFIC</span>
+          </div>
+          <button class="legend-orientation-toggle mono" id="btnRadarOrientation" title="Toggle Orientation (Facing Up vs North Up)">
+            <span class="legend-cone-symbol">▲</span>
+            <span class="legend-text-facing" id="radarFacingLabel">FACING UP (S)</span>
+          </button>
+        </div>
+
+        <!-- Selected Target Inspector HUD Card -->
+        <div class="radar-selected-target" id="radarSelectedTarget" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN 3: LOG
+         ============================================================ -->
+    <div class="view-container" id="viewLog">
+      <div class="log-screen-wrapper">
+        <div class="log-search-container">
+          <div class="search-input-wrapper">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="logSearchInput" class="log-search-input" placeholder="Search callsign, airline, route...">
+            <button class="search-clear-btn" id="logSearchClear" style="display: none;" title="Clear search">✕</button>
+          </div>
+          <div class="log-filter-segments">
+            <button class="log-segment-btn active" data-filter="all">ALL</button>
+            <button class="log-segment-btn" data-filter="overhead">OVERHEAD</button>
+            <button class="log-segment-btn" data-filter="nearby">NEARBY</button>
+          </div>
+        </div>
+
+        <div class="log-rows-container" id="logListDeck">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN 4: STATS
+         ============================================================ -->
+    <div class="view-container" id="viewStats">
+      <div class="stats-screen-wrapper">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label mono">TOTAL PASSES</span>
+            <span class="kpi-val mono" id="statTotalFlights">0</span>
+            <span class="kpi-sub mono" id="statRatioSub">0 Int'l · 0 Dom</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label mono">PEAK TRAFFIC</span>
+            <span class="kpi-val mono" id="statMaxSimultaneous">0</span>
+            <span class="kpi-sub mono">Simultaneous targets</span>
+          </div>
+        </div>
+
+        <div class="rarest-card" id="rarestCard">
+          <div class="rarest-info">
+            <div class="rarest-title mono">RAREST AIRCRAFT SEEN</div>
+            <div class="rarest-code mono" id="statRarestCode">—</div>
+            <div class="rarest-meta" id="statRarestMeta">Waiting for first overhead target</div>
+          </div>
+          <div class="rarest-badge mono" id="statRarestBadge">0 PASS</div>
+        </div>
+
+        <!-- COLLECTION (LIFE LIST) -->
+        <div class="chart-box collection-box" id="collectionBox">
+          <div class="chart-header collection-header">
+            <div class="collection-title-wrap">
+              <span class="chart-title mono">COLLECTION (LIFE LIST)</span>
+              <span class="collection-sub mono" id="collectionTotalCount">0 unique</span>
+            </div>
+            <!-- Scope Toggle: Overhead only vs All nearby -->
+            <div class="collection-scope-toggle" id="collectionScopeToggle">
+              <button class="scope-btn active" data-scope="overhead" id="btnScopeOverhead">OVERHEAD</button>
+              <button class="scope-btn" data-scope="nearby" id="btnScopeNearby">ALL NEARBY</button>
+            </div>
+          </div>
+
+          <!-- Collection Category Tabs -->
+          <div class="collection-nav-tabs" id="collectionNavTabs">
+            <button class="col-tab-btn active" data-cat="airlines" id="colTabAirlines">
+              AIRLINES <span class="col-tab-badge mono" id="badgeColAirlines">0</span>
+            </button>
+            <button class="col-tab-btn" data-cat="types" id="colTabTypes">
+              TYPES <span class="col-tab-badge mono" id="badgeColTypes">0</span>
+            </button>
+            <button class="col-tab-btn" data-cat="registrations" id="colTabRegs">
+              REGISTRATIONS <span class="col-tab-badge mono" id="badgeColRegs">0</span>
+            </button>
+          </div>
+
+          <!-- Collection Entries List -->
+          <div class="collection-list-deck" id="collectionListDeck">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- 24H x 7-DAY TRAFFIC HEATMAP -->
+        <div class="chart-box heatmap-box" id="heatmapBox">
+          <div class="chart-header heatmap-header">
+            <div class="heatmap-title-wrap">
+              <span class="chart-title mono">TRAFFIC HEATMAP (24H × 7D)</span>
+              <span class="heatmap-sub mono" id="heatmapSummarySub">Monday – Sunday · 00h – 23h</span>
+            </div>
+            <div class="heatmap-legend mono" id="heatmapLegend">
+              <span class="heatmap-legend-label">DENSITY</span>
+              <span class="heat-swatch swatch-0" title="0 flights"></span>
+              <span class="heat-swatch swatch-1" title="Low"></span>
+              <span class="heat-swatch swatch-2" title="Medium"></span>
+              <span class="heat-swatch swatch-3" title="High"></span>
+              <span class="heat-swatch swatch-gap" title="No data recorded"></span>
+            </div>
+          </div>
+          <div class="heatmap-svg-container" id="heatmapSvgContainer"></div>
+          <div class="chart-tooltip mono" id="heatmapTooltip" style="display: none;"></div>
+        </div>
+
+        <div class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title mono">HOURLY TRAFFIC (00H - 23H)</span>
+            <span class="section-tag mono" id="statPeakHourTag">Peak: —</span>
+          </div>
+          <div class="svg-chart-container" id="hourlyChartContainer"></div>
+          <div class="chart-tooltip mono" id="statsChartTooltip" style="display: none;"></div>
+        </div>
+
+        <div class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title mono">TOP AIRLINES</span>
+          </div>
+          <div class="rank-bars-list" id="topAirlinesList"></div>
+        </div>
+
+        <div class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title mono">TOP CITY CORRIDORS</span>
+          </div>
+          <div class="rank-bars-list" id="topRoutesList"></div>
+        </div>
+
+        <div class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title mono">AIRFRAME BREAKDOWN</span>
+          </div>
+          <div class="rank-bars-list" id="aircraftBreakdownList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN 5: SETTINGS
+         ============================================================ -->
+    <div class="view-container" id="viewSettings">
+      <div class="settings-screen-wrapper">
+
+        <!-- LOCATION -->
+        <div class="settings-group-header mono">LOCATION & ORIENTATION</div>
+        <div class="settings-group">
+          <div class="settings-row">
+            <span class="settings-row-label">Latitude</span>
+            <input type="text" inputmode="decimal" class="settings-input mono" id="latitude" placeholder="21.1458">
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">Longitude</span>
+            <input type="text" inputmode="decimal" class="settings-input mono" id="longitude" placeholder="79.0882">
+          </div>
+          <div class="settings-row">
+            <span class="settings-row-label">I face</span>
+            <select class="settings-select mono" id="userFacing">
+              <option value="N">North (0°)</option>
+              <option value="NE">Northeast (45°)</option>
+              <option value="E">East (90°)</option>
+              <option value="SE">Southeast (135°)</option>
+              <option value="S" selected>South (180°)</option>
+              <option value="SW">Southwest (225°)</option>
+              <option value="W">West (270°)</option>
+              <option value="NW">Northwest (315°)</option>
+            </select>
+          </div>
+          <div class="settings-row clickable-row" id="rowRadarOrientation">
+            <span class="settings-row-label">Radar orientation</span>
+            <span class="settings-row-val mono" id="radarOrientationDisplay">Facing up</span>
+          </div>
+        </div>
+
+        <!-- RADAR RANGE & THRESHOLD -->
+        <div class="settings-group-header mono">RADAR DETECTION</div>
+        <div class="settings-group">
+          <div class="settings-row clickable-row" id="rowRadius">
+            <span class="settings-row-label">Detection radius</span>
+            <span class="settings-row-val mono" id="radiusDisplay">30 km</span>
+          </div>
+          <div class="settings-row clickable-row" id="rowThreshold">
+            <span class="settings-row-label">Overhead threshold</span>
+            <span class="settings-row-val mono" id="overheadThresholdDisplay">5 km</span>
+          </div>
+        </div>
+
+        
+        <!-- WATCHLIST & RARE ALERTS -->
+        <div class="settings-group-header mono">WATCHLIST & RARE ALERTS</div>
+        <div class="settings-group">
+          <div class="settings-row clickable-row" id="rowWatchlistEditor">
+            <span class="settings-row-label">Watchlist rules</span>
+            <span class="settings-row-val mono" id="watchlistCountDisplay">0 rules</span>
+          </div>
+          <div class="settings-row clickable-row" id="rowRareThreshold">
+            <span class="settings-row-label">"Rare for me" threshold</span>
+            <span class="settings-row-val mono" id="rareThresholdDisplay">&lt; 2 passes</span>
+          </div>
+        </div>
+
+        <!-- ALERTS -->
+        <div class="settings-group-header mono">ALERTS</div>
+        <div class="settings-group">
+          <div class="settings-row">
+            <span class="settings-row-label">Overhead alerts</span>
+            <label class="ios-switch">
+              <input type="checkbox" id="alertsEnabled" checked>
+              <span class="ios-track"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="settings-row-label">Chime</span>
+              <button class="btn-test-chime mono" id="testChimeBtn" title="Test sound">test</button>
+            </div>
+            <label class="ios-switch">
+              <input type="checkbox" id="soundEnabled" checked>
+              <span class="ios-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- MEDIA & DISPLAY -->
+        <div class="settings-group-header mono">MEDIA & PHOTOS</div>
+        <div class="settings-group">
+          <div class="settings-row">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span class="settings-row-label">Aircraft photos</span>
+              <span class="mono" style="font-size:10px; color:var(--text-tertiary);">Planespotters.net · opt-in</span>
+            </div>
+            <label class="ios-switch">
+              <input type="checkbox" id="showAircraftPhotos">
+              <span class="ios-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Version & Secret Mock Provider Trigger -->
+        <div class="settings-version-footer">
+          <span class="settings-version mono" id="settingsVersionTag" title="Click 5 times for mock data">Airvee v2.5.0</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ====== Bottom Navigation Bar (Fixed 52px across all screens) ====== -->
+    <nav class="nav-bottom-bar" id="mainTabBar">
+      <div class="nav-sliding-indicator" id="navIndicator"></div>
+
+      <!-- Tab 0: Live -->
+      <button class="main-tab-btn active" data-tab="live" title="Live">
+        <span class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.3c.4-.2.6-.6.5-1.1z"/>
+          </svg>
+        </span>
+        <span class="tab-label">Live</span>
+      </button>
+
+      <!-- Tab 1: Radar -->
+      <button class="main-tab-btn" data-tab="radar" title="Radar">
+        <span class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <circle cx="12" cy="12" r="5"/>
+            <circle cx="12" cy="12" r="1.5"/>
+          </svg>
+        </span>
+        <span class="tab-label">Radar</span>
+      </button>
+
+      <!-- Tab 2: Log -->
+      <button class="main-tab-btn" data-tab="log" title="Log">
+        <span class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="18" x2="20" y2="18"/>
+          </svg>
+        </span>
+        <span class="tab-label">Log</span>
+      </button>
+
+      <!-- Tab 3: Stats -->
+      <button class="main-tab-btn" data-tab="stats" title="Stats">
+        <span class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+        </span>
+        <span class="tab-label">Stats</span>
+      </button>
+
+      <!-- Tab 4: Settings -->
+      <button class="main-tab-btn" data-tab="settings" title="Settings">
+        <span class="tab-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"/>
+            <line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/>
+            <line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+        </span>
+        <span class="tab-label">Settings</span>
+      </button>
+    </nav>
+
+
+    <!-- ====== Watchlist Manager Modal ====== -->
+    <div class="watchlist-modal-backdrop" id="watchlistModal" style="display: none;">
+      <div class="watchlist-modal-content">
+        <div class="watchlist-modal-header">
+          <span class="watchlist-modal-title mono">WATCHLIST RULES</span>
+          <button class="watchlist-close-btn" id="btnCloseWatchlistModal" title="Close">✕</button>
+        </div>
+        <div class="watchlist-modal-body" id="watchlistRulesList">
+          <!-- Rendered dynamically -->
+        </div>
+        <div class="watchlist-modal-footer">
+          <button class="btn-primary-action mono" id="btnAddNewRule">+ Add Rule</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== Rule Editor Sub-Modal ====== -->
+    <div class="rule-edit-modal-backdrop" id="ruleEditModal" style="display: none;">
+      <div class="rule-edit-content">
+        <div class="watchlist-modal-header">
+          <span class="watchlist-modal-title mono" id="ruleEditModalTitle">EDIT RULE</span>
+          <button class="watchlist-close-btn" id="btnCloseRuleEditModal" title="Close">✕</button>
+        </div>
+        <div class="rule-edit-form">
+          <input type="hidden" id="ruleEditId">
+
+          <div class="form-group">
+            <label class="form-label mono">Rule name</label>
+            <input type="text" id="ruleNameInput" class="form-input" placeholder="e.g. A380 Super-Heavy">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label mono">Aircraft type (ICAO, comma-separated)</label>
+            <input type="text" id="ruleTypeInput" class="form-input mono" placeholder="e.g. A388, B748, B744">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label mono">Airline (ICAO code or name)</label>
+            <input type="text" id="ruleAirlineInput" class="form-input mono" placeholder="e.g. UAE, Emirates">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label mono">Registration (optional)</label>
+            <input type="text" id="ruleRegInput" class="form-input mono" placeholder="e.g. A6-EEA">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label mono">Callsign prefix (optional)</label>
+            <input type="text" id="rulePrefixInput" class="form-input mono" placeholder="e.g. ETH, EK39">
+          </div>
+
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label class="form-label mono">Category</label>
+              <select id="ruleCargoSelect" class="form-select mono">
+                <option value="any">Any flights</option>
+                <option value="cargo_only">Cargo only</option>
+                <option value="military_only">Military only</option>
+                <option value="passenger_only">Passenger only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label mono">Alert style</label>
+              <select id="ruleAlertStyleSelect" class="form-select mono">
+                <option value="special">Special (distinct chime)</option>
+                <option value="normal">Normal chime</option>
+                <option value="silent">Silent (log only)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-check-group">
+            <label class="form-check-label">
+              <input type="checkbox" id="ruleRareOnlyCheckbox">
+              <span class="mono">Only alert if "Rare for me"</span>
+            </label>
+          </div>
+
+          <div class="form-check-group">
+            <label class="form-check-label">
+              <input type="checkbox" id="ruleQuietHoursCheckbox">
+              <span class="mono">Ignore quiet hours (always alert)</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label mono">Overhead threshold (km, blank = default)</label>
+            <input type="number" id="ruleThresholdInput" class="form-input mono" placeholder="e.g. 12" min="1" max="50">
+          </div>
+
+          <div class="form-actions-bar">
+            <button type="button" class="btn-test-rule-action mono" id="btnTestRule">Test rule</button>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn-secondary-action mono" id="btnCancelRule">Cancel</button>
+              <button type="button" class="btn-primary-action mono" id="btnSaveRule">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

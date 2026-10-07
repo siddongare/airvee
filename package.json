@@ -1,0 +1,36 @@
+{
+  "name": "airvee",
+  "version": "1.0.0",
+  "description": "Overhead flight tracking radar for Chrome. Privacy-first, zero-backend, kinematic CPA engine, canvas radar scope.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node -c background.js offscreen.js popup.js radar.js lib/airline-logos.js lib/audio.js lib/db.js lib/geo.js lib/photos.js lib/radar.js lib/schedule.js lib/visibility.js lib/watchlist.js providers/fr24.js providers/index.js providers/mock.js && npm test",
+    "ci": "npm run check"
+  },
+  "keywords": [
+    "aviation",
+    "ads-b",
+    "flight-radar",
+    "radar",
+    "chrome-extension",
+    "manifest-v3",
+    "astronomy",
+    "dead-reckoning",
+    "canvas-radar",
+    "planespotting"
+  ],
+  "author": "Siddharth Dongare",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/siddongare/airvee.git"
+  },
+  "bugs": {
+    "url": "https://github.com/siddongare/airvee/issues"
+  },
+  "homepage": "https://github.com/siddongare/airvee"
+}

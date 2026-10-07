@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airvee — Polar Radar</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      width: 100vw;
+      height: 100vh;
+      max-height: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #080A0F;
+    }
+
+    .radar-fulltab-layout {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 54px);
+      overflow: hidden;
+    }
+
+    .radar-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: radial-gradient(circle at center, #0F172A 0%, #080A0F 75%);
+    }
+
+    .radar-stage-canvas {
+      width: min(80vh, 700px);
+      height: min(80vh, 700px);
+      border-radius: 50%;
+    }
+
+    .radar-sidebar {
+      width: 380px;
+      border-left: 1px solid var(--glass-border);
+      background: var(--glass-nav);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sidebar-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== Header ====== -->
+  <header class="nav-bar">
+    <div class="nav-brand">
+      <div class="nav-logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3a9 9 0 0 1 9 9"/>
+          <line x1="12" y1="12" x2="18.36" y2="5.64"/>
+          <circle cx="12" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="nav-titles">
+        <span class="nav-title">Airvee Radar</span>
+        <span class="nav-sub mono" id="stationLocation">Nagpur (21.1458° N, 79.0882° E)</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="section-tag mono" id="fullRadiusTag">15 km Scope</span>
+      <div class="status-pill" id="statusBadge">
+        <span class="status-dot"></span>
+        <span class="status-text">Active Sweep</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====== Main Layout ====== -->
+  <main class="radar-fulltab-layout">
+
+    <!-- Polar Canvas Stage -->
+    <div class="radar-stage">
+      <canvas id="fullRadarCanvas" class="radar-stage-canvas"></canvas>
+
+      <div class="radar-legend-bar" style="margin-top: 14px;">
+        <div class="legend-item"><span class="legend-dot in-range"></span><span>Traffic</span></div>
+        <div class="legend-item"><span class="legend-dot alert"></span><span>Overhead Alert</span></div>
+        <div class="legend-item"><span class="legend-dot cone"></span><span>Facing Cone</span></div>
+        <div class="legend-item"><span class="legend-dot sweep"></span><span>Radar Sweep</span></div>
+      </div>
+    </div>
+
+    <!-- Live Traffic Telemetry Sidebar -->
+    <aside class="radar-sidebar">
+      <div class="sidebar-head">
+        <div>
+          <span class="section-label">Tracked Targets</span>
+          <span class="count-pill mono" id="sidebarFlightCount">0</span>
+        </div>
+        <span class="footer-source mono" id="sidebarSource">FR24</span>
+      </div>
+
+      <div class="sidebar-scroll" id="sidebarFlightList">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+
+  </main>
+
+  <script type="module" src="radar.js"></script>
+</body>
+</html>

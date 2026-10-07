@@ -1,0 +1,28 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node & dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage & logs
+coverage/
+*.log
+
+# Editor & IDE artifacts
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sublime-workspace
+
+# Temporary & backup folders
+v2/
+*.tmp
+*.bak
+.system_generated/
