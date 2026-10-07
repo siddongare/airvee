@@ -16,7 +16,8 @@ import {
   isValidCoordinate,
   bearingToCompass,
   getRelativeDirection,
-  classifyPass
+  classifyPass,
+  formatOverheadRowSubline
 } from './lib/geo.js';
 import { playAirportDoubleChime, playWavFallbackChime } from './lib/audio.js';
 import {
@@ -602,6 +603,15 @@ function tickCountdowns() {
           etaEl.textContent = `${Math.round(f.distance)} km`;
         }
       }
+
+      const sublineEl = row.querySelector('.row-subline');
+      if (sublineEl) {
+        if (f.passClassification === 'overhead') {
+          sublineEl.textContent = formatOverheadRowSubline(f);
+        } else {
+          sublineEl.textContent = `${esc(f.aircraftType || 'Aircraft')}  ·  ${formatNearFlightStatus(f)}`;
+        }
+      }
     });
 
     // 3. Radar scope flight sync
@@ -967,7 +977,7 @@ function buildOverheadFlightRowHtml(f) {
         </div>
       </div>
       <div class="row-subline mono">
-        ${esc(f.aircraftType || 'Aircraft')}  ·  ${distKm} km ${dir}
+        ${esc(formatOverheadRowSubline(f))}
       </div>
 
       <!-- Expandable Telemetry Drawer -->
@@ -1448,18 +1458,11 @@ function filterLogByCollectionItem(term) {
 }
 
 function buildLikelyTodaySectionHtml(predictions) {
-  let content = '';
   if (!predictions || predictions.length === 0) {
-    content = `
-      <div class="likely-empty mono">
-        Learning recurring schedule...<br>
-        <span style="font-size:10px; color:var(--text-tertiary); opacity:0.8;">
-          Needs ≥3 passes in a ±20m window in last 7 days
-        </span>
-      </div>
-    `;
-  } else {
-    content = predictions.map(p => {
+    return '';
+  }
+
+  const content = predictions.map(p => {
       const logo = getAirlineMonogramBadge(p);
       const isPassed = p.hasPassedToday;
       let statusTag = '';

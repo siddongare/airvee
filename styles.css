@@ -332,10 +332,19 @@ html, body {
    SCREEN 1: LIVE (HERO & NEARBY)
    ============================================================ */
 
+#viewLive {
+  padding-bottom: 0;
+  /* Fade mask at bottom edge (24px) so content smoothly fades before the bottom edge */
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent 100%);
+}
+
 .live-scroll-area {
   display: flex;
   flex-direction: column;
   padding-top: 10px;
+  /* Bottom padding equal to tab bar height (52px) + 16px = 68px */
+  padding-bottom: 68px;
 }
 
 .hero-block {

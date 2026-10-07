@@ -14,7 +14,8 @@ import {
   parseFacingDirection,
   getRelativeDirection,
   formatLookDirection,
-  classifyPass
+  classifyPass,
+  formatOverheadRowSubline
 } from '../lib/geo.js';
 
 let passed = 0;
@@ -265,6 +266,61 @@ console.log('\n--- 8. Pass Classification (Overhead vs Near) ---');
     tCpa: null
   };
   assert(classifyPass(missingSpeedFlight, defaultSettings) === 'near', 'Flight with missing speed/ETA classified as near');
+}
+
+console.log('\n--- 9. Overhead Row Subline Formatter ---');
+{
+  // 1. Current distance < 1 km prints "now overhead", not a compass direction
+  const overheadNowFlight = {
+    aircraftType: 'B789',
+    distance: 0.4,
+    currentBearing: 315,
+    dCpa: 0.1,
+    bearingAtCpa: 315
+  };
+  const subline1 = formatOverheadRowSubline(overheadNowFlight);
+  assert(subline1 === 'B789 · now overhead', `Subline for distance < 1 km: got "${subline1}"`);
+  assert(!subline1.includes('NW') && !subline1.includes('northwest'), 'Does not print compass direction when distance < 1 km');
+
+  // 2. Zero distance prints "now overhead"
+  const zeroDistFlight = {
+    aircraftType: 'A388',
+    distance: 0,
+    currentBearing: 180,
+    dCpa: 0
+  };
+  const subline2 = formatOverheadRowSubline(zeroDistFlight);
+  assert(subline2 === 'A388 · now overhead', `Subline for 0 km distance: got "${subline2}"`);
+
+  // 3. Current distance > 1 km prints current distance and compass direction
+  const inboundApproaching = {
+    aircraftType: 'A359',
+    distance: 14.2,
+    currentBearing: 225, // SW
+    dCpa: 0.5
+  };
+  const subline3 = formatOverheadRowSubline(inboundApproaching);
+  assert(subline3 === 'A359 · now 14 km SW', `Subline with CPA <= 1 km: got "${subline3}"`);
+  assert(!subline3.includes('passes within'), 'Does not print "passes within" when CPA <= 1 km');
+
+  // 4. CPA > 1 km prints "passes within <CPA distance>"
+  const cpaOverOne = {
+    aircraftType: 'B77W',
+    distance: 12.0,
+    currentBearing: 90, // E
+    dCpa: 3.8
+  };
+  const subline4 = formatOverheadRowSubline(cpaOverOne);
+  assert(subline4 === 'B77W · now 12 km E · passes within 4 km', `Subline with CPA > 1 km: got "${subline4}"`);
+
+  // 5. Aircraft type fallback to 'Aircraft' if missing
+  const noTypeFlight = {
+    aircraftType: '',
+    distance: 0.8,
+    dCpa: 0.2
+  };
+  const subline5 = formatOverheadRowSubline(noTypeFlight);
+  assert(subline5 === 'Aircraft · now overhead', `Subline with empty aircraft type: got "${subline5}"`);
 }
 
 console.log(`\n========================================`);

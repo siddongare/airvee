@@ -90,6 +90,17 @@ assert(classB === 'near', 'Mock flight B (20 km east) classifies as near');
 const classC = classifyPass(cpaC, defaultSettings);
 assert(classC === 'overhead', 'Mock flight C (inbound SW, CPA 0km) classifies as overhead');
 
+// Two simultaneous overhead flights exist under default settings:
+const overheadMockCount = [cpaA, cpaB, cpaC].filter(f => classifyPass(f, defaultSettings) === 'overhead').length;
+assert(overheadMockCount === 2, `Default settings has 2 simultaneous overhead flights (A & C)`);
+
+// Under a restrictive threshold (e.g. 0 km / no overhead passes), all flights are classified as near (no hero)
+const strictSettings = { overheadThresholdKm: 0, minElevationDeg: 89.999 };
+const strictOverheadCount = [cpaA, cpaB, cpaC].filter(f => classifyPass(f, strictSettings) === 'overhead').length;
+assert(strictOverheadCount === 0, 'Restrictive settings results in 0 overhead flights (no hero, calm line)');
+const strictNearCount = [cpaA, cpaB, cpaC].filter(f => classifyPass(f, strictSettings) === 'near').length;
+assert(strictNearCount === 3, 'All 3 flights remain in near list when nothing is overhead');
+
 console.log('\n========================================');
 console.log(`MOCK PROVIDER TEST SUMMARY: ${passed} passed, ${failed} failed.`);
 console.log('========================================\n');
