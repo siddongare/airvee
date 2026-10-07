@@ -22,6 +22,7 @@ coverage/
 *.sublime-workspace
 
 # Temporary & backup folders
+dist/
 v2/
 *.tmp
 *.bak
