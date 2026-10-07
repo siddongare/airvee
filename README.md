@@ -25,7 +25,7 @@ I built it with AI coding tools and then tested, reviewed and reshaped it myself
 - **Radar view.** A canvas radar centred on you with range rings, plane trails and your facing direction.
 - **Watchlist.** Alert rules by aircraft type, airline, registration, callsign prefix, or cargo and passenger flights, plus a "rare for me" rule based on your own log. Each rule can use its own alert style.
 - **Log and statistics.** Every overhead pass is stored on your device. Includes a collection of airlines, aircraft types and registrations you have seen, an hour-by-weekday heatmap, and "likely today" suggestions from your own history.
-- **Visibility hint.** Daylight, golden hour, twilight and night are computed on your device from astronomical solar equations. When enabled, cloud cover is fetched from Open-Meteo to show contrast, contrail and strobe-visibility hints.
+- **Visibility hint.** Simple rules based on sun height and cloud cover to suggest looking conditions, for example "Night · look for strobe lights". Not a physical simulation.
 - **Aircraft photos.** Off by default. When enabled, shows a photo with the photographer's credit.
 
 ## Install

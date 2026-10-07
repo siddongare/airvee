@@ -11,6 +11,8 @@ Airvee has no server, no accounts, no analytics and no advertising. Your locatio
 
 The flight-data provider necessarily learns your approximate area, because that is how a "flights near me" query works. Every service you contact also sees your IP address, as with any website. Airvee itself never receives any of this data.
 
+Clicking a notification opens a public flight tracking page in a new tab. For Flightradar24 flights, it opens `https://www.flightradar24.com/<callsign>`. If adsb.lol is configured, it opens `https://globe.adsb.lol/?callsign=<callsign>`. The URL contains only the aircraft callsign (for example UAE504). It never contains your location or coordinates.
+
 ## Stored on your device
 - Settings and your observer location: chrome.storage.local.
 - The flight log: IndexedDB in your browser. You can export it as CSV or clear it from the Log tab.
@@ -22,11 +24,7 @@ The flight-data provider necessarily learns your approximate area, because that 
 - `storage`: saves settings and observer coordinates in `chrome.storage.local`.
 - `unlimitedStorage`: allows storage for the IndexedDB flight log without browser quota limits.
 - `offscreen`: plays the alert chime audio from an offscreen document because Manifest V3 service workers cannot access audio APIs directly.
-- `sidePanel`: provides an optional side panel view for the radar and live flights.
 - `https://data-cloud.flightradar24.com/*`: fetches live flight positions within your search area.
-- `https://opensky-network.org/*`: fallback flight data provider domain in the manifest.
-- `https://ipwho.is/*`: fallback geolocation domain in the manifest.
-- `https://ipapi.co/*`: fallback geolocation domain in the manifest.
 - `https://api.open-meteo.com/*`: fetches localized cloud cover for optical visibility classification.
 - `https://api.planespotters.net/*`: fetches aircraft photo metadata when photo lookup is enabled.
 - `https://*.plnspttrs.net/*`: loads aircraft photos from the Planespotters CDN.
