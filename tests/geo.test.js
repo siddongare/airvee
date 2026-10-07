@@ -14,6 +14,7 @@ import {
   parseFacingDirection,
   getRelativeDirection,
   formatLookDirection,
+  formatLookAngles,
   classifyPass,
   formatOverheadRowSubline
 } from '../lib/geo.js';
@@ -183,19 +184,19 @@ console.log('\n--- 7. Compass & Look Direction Helpers ---');
   assert(bearingToCompass(270) === 'W', '270° is W');
   assert(bearingToCompass(315) === 'NW', '315° is NW');
 
-  // Relative direction with observer facing
-  // If observer faces North (0°):
-  // Target at 315° (NW) is to observer's front-left
-  assert(getRelativeDirection(315, 'N') === 'front-left', 'Facing North, target at NW is front-left');
-  // Target at 90° (E) is to observer's right
-  assert(getRelativeDirection(90, 'N') === 'to your right', 'Facing North, target at E is to your right');
-  // Target at 180° (S) is behind observer
-  assert(getRelativeDirection(180, 'N') === 'behind you', 'Facing North, target at S is behind you');
+  // Relative direction with observer facing North (0°):
+  // All 8 relative direction labels tested individually
+  assert(getRelativeDirection(0, 'N') === 'in front of you', 'Facing North, target at 0° is in front of you');
+  assert(getRelativeDirection(45, 'N') === 'front-right', 'Facing North, target at 45° is front-right');
+  assert(getRelativeDirection(90, 'N') === 'to your right', 'Facing North, target at 90° is to your right');
+  assert(getRelativeDirection(135, 'N') === 'behind-right', 'Facing North, target at 135° is behind-right');
+  assert(getRelativeDirection(180, 'N') === 'behind you', 'Facing North, target at 180° is behind you');
+  assert(getRelativeDirection(225, 'N') === 'behind-left', 'Facing North, target at 225° is behind-left');
+  assert(getRelativeDirection(270, 'N') === 'to your left', 'Facing North, target at 270° is to your left');
+  assert(getRelativeDirection(315, 'N') === 'front-left', 'Facing North, target at 315° is front-left');
 
-  // If observer faces East (90°):
-  // Target at 90° is straight ahead
-  assert(getRelativeDirection(90, 'E') === 'straight ahead', 'Facing East, target at 90° is straight ahead');
-  // Target at 0° (North) is to observer's left
+  // Relative direction with observer facing East (90°):
+  assert(getRelativeDirection(90, 'E') === 'in front of you', 'Facing East, target at 90° is in front of you');
   assert(getRelativeDirection(0, 'E') === 'to your left', 'Facing East, target at 0° is to your left');
 
   // Look Direction formatting
@@ -203,10 +204,24 @@ console.log('\n--- 7. Compass & Look Direction Helpers ---');
   assert(fmtNoFacing === 'Look SW, 40° up', `Format without facing: "${fmtNoFacing}"`);
 
   const fmtFacing = formatLookDirection(225, 39.6, 'N');
-  assert(fmtFacing === 'Look SW (back-left), 40° up', `Format with North facing: "${fmtFacing}"`);
+  assert(fmtFacing === 'Look SW (behind-left), 40° up', `Format with North facing: "${fmtFacing}"`);
 
-  const fmtAhead = formatLookDirection(0, 52.2, 'N');
-  assert(fmtAhead === 'Look N (straight ahead), 52° up', `Format ahead: "${fmtAhead}"`);
+  const fmtInFront = formatLookDirection(0, 52.2, 'N');
+  assert(fmtInFront === 'Look N (in front of you), 52° up', `Format in front: "${fmtInFront}"`);
+
+  // Elevation >= 80° tests: elevation 85 gives "Straight up"
+  const fmt85Hero = formatLookAngles(180, 85);
+  assert(fmt85Hero === 'Straight up', `formatLookAngles at 85° gives "Straight up": "${fmt85Hero}"`);
+  const fmt85Notif = formatLookDirection(180, 85, 'N');
+  assert(fmt85Notif === 'Look straight up', `formatLookDirection at 85° gives "Look straight up": "${fmt85Notif}"`);
+
+  // Elevation < 80° tests: elevation 79 gives compass + elevation
+  const fmt79Hero = formatLookAngles(0, 79);
+  assert(fmt79Hero === 'N  ·  79°  up', `formatLookAngles at 79° gives compass + elevation: "${fmt79Hero}"`);
+  const fmt79Notif = formatLookDirection(0, 79, 'N');
+  assert(fmt79Notif === 'Look N (in front of you), 79° up', `formatLookDirection at 79° gives compass + elevation: "${fmt79Notif}"`);
+  const fmt79NoFacing = formatLookDirection(0, 79);
+  assert(fmt79NoFacing === 'Look N, 79° up', `formatLookDirection at 79° without facing gives compass + elevation: "${fmt79NoFacing}"`);
 }
 
 console.log('\n--- 8. Pass Classification (Overhead vs Near) ---');

@@ -708,17 +708,20 @@ function tickCountdowns() {
         }
 
         const lookAngles = $('#heroLookAngles');
-        if (lookAngles) {
-          const compass = bearingToCompass(bearingVal, false);
-          const rawElev = hf.elevationAtCpa != null ? hf.elevationAtCpa : hf.currentElevation;
-          const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-          lookAngles.textContent = `${compass}  ·  ${elev}°  up`;
-        }
-
         const lookRel = $('#heroLookRelative');
-        if (lookRel) {
-          const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
-          lookRel.textContent = capitalize(rel);
+        const rawElev = hf.elevationAtCpa != null ? hf.elevationAtCpa : hf.currentElevation;
+        const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
+
+        if (elev >= 80) {
+          if (lookAngles) lookAngles.textContent = 'Straight up';
+          if (lookRel) lookRel.textContent = '';
+        } else {
+          const compass = bearingToCompass(bearingVal, false);
+          if (lookAngles) lookAngles.textContent = `${compass}  ·  ${elev}°  up`;
+          if (lookRel) {
+            const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'in front of you';
+            lookRel.textContent = capitalize(rel);
+          }
         }
       }
     }
@@ -975,7 +978,10 @@ async function renderFlightList() {
     const compassWord = bearingToCompass(bearingVal, false);
     const rawElev = hero.elevationAtCpa != null ? hero.elevationAtCpa : hero.currentElevation;
     const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-    const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'Ahead';
+    const isStraightUp = elev >= 80;
+    const anglesText = isStraightUp ? 'Straight up' : `${compassWord}  ·  ${elev}°  up`;
+    const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'in front of you';
+    const relText = isStraightUp ? '' : capitalize(rel);
     const heroLogo = getAirlineMonogramBadge(hero);
     const heroVis = getFlightVisibilityInfo(hero);
 
@@ -1011,8 +1017,8 @@ async function renderFlightList() {
 
           <div class="look-meta-block">
             <div class="look-label mono">LOOK</div>
-            <div class="look-angle-main mono" id="heroLookAngles">${compassWord}  ·  ${elev}°  up</div>
-            <div class="look-relative-sub" id="heroLookRelative">${capitalize(rel)}</div>
+            <div class="look-angle-main mono" id="heroLookAngles">${anglesText}</div>
+            <div class="look-relative-sub" id="heroLookRelative">${relText}</div>
           </div>
         </div>
 
