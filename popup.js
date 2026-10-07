@@ -130,6 +130,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Poll update every 8 seconds
   pollInterval = setInterval(refreshFlights, 8000);
 
+  // One-time reset for mock-contaminated peak traffic stat
+  try {
+    const { maxSimultaneousResetV1 } = await chrome.storage.local.get('maxSimultaneousResetV1');
+    if (!maxSimultaneousResetV1) {
+      await chrome.storage.local.set({
+        maxSimultaneousPlanes: 0,
+        maxSimultaneousAt: null,
+        maxSimultaneousResetV1: true
+      });
+    }
+  } catch (e) {}
+
   // Live countdown ticker every 1 second
   countdownInterval = setInterval(tickCountdowns, 1000);
 });
@@ -393,14 +405,37 @@ function bindEvents() {
   }
 
   // Log Segment Filter Buttons
-  $$('.log-segment-btn').forEach(btn => {
+  $$('.log-segment-btn[data-filter]').forEach(btn => {
     btn.addEventListener('click', () => {
-      $$('.log-segment-btn').forEach(b => b.classList.remove('active'));
+      $$('.log-segment-btn[data-filter]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentLogFilter = btn.dataset.filter || 'all';
       renderLogView();
     });
   });
+
+  // Clear Flight Log & Peak Traffic Stat
+  const btnClearLog = $('#btnClearLog');
+  if (btnClearLog) {
+    btnClearLog.addEventListener('click', async () => {
+      if (!window.confirm('Clear all logged flight passes and reset peak traffic count?')) {
+        return;
+      }
+      try {
+        await clearAllLogs();
+        await chrome.storage.local.set({
+          maxSimultaneousPlanes: 0,
+          maxSimultaneousAt: null
+        });
+        await renderLogView();
+        if (currentActiveTab === 'stats') {
+          await renderStatsView();
+        }
+      } catch (err) {
+        console.warn('Airvee: Failed to clear flight log:', err);
+      }
+    });
+  }
 
   // Collection Scope Toggle (Overhead only vs All nearby)
   const btnScopeOverhead = $('#btnScopeOverhead');
@@ -1185,9 +1220,21 @@ async function renderStatsView() {
   const statRatio = $('#statRatioSub');
   if (statRatio) statRatio.textContent = `${stats.internationalCount || 0} Int'l · ${stats.domesticCount || 0} Dom`;
 
-  const { maxSimultaneousPlanes = 0 } = await chrome.storage.local.get('maxSimultaneousPlanes');
+  const { maxSimultaneousPlanes = 0, maxSimultaneousAt = null } = await chrome.storage.local.get(['maxSimultaneousPlanes', 'maxSimultaneousAt']);
   const statMax = $('#statMaxSimultaneous');
-  if (statMax) statMax.textContent = Math.max(maxSimultaneousPlanes, stats.totalFlights > 0 ? 1 : 0);
+  if (statMax) statMax.textContent = maxSimultaneousPlanes || 0;
+
+  const statMaxSub = $('#statMaxSimultaneousSub');
+  if (statMaxSub) {
+    if (maxSimultaneousAt) {
+      const d = new Date(maxSimultaneousAt);
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayStr = dayNames[d.getDay()] || '';
+      statMaxSub.textContent = `${dayStr} ${formatLogTime(d)}`;
+    } else {
+      statMaxSub.textContent = '—';
+    }
+  }
 
   const rarestCode = $('#statRarestCode');
   const rarestMeta = $('#statRarestMeta');

@@ -89,6 +89,7 @@
             <button class="log-segment-btn active" data-filter="all">ALL</button>
             <button class="log-segment-btn" data-filter="overhead">OVERHEAD</button>
             <button class="log-segment-btn" data-filter="nearby">NEARBY</button>
+            <button class="log-segment-btn" id="btnClearLog" title="Clear flight log">CLEAR</button>
           </div>
         </div>
 
@@ -110,9 +111,9 @@
             <span class="kpi-sub mono" id="statRatioSub">0 Int'l · 0 Dom</span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-label mono">PEAK TRAFFIC</span>
+            <span class="kpi-label mono">MOST IN RANGE AT ONCE</span>
             <span class="kpi-val mono" id="statMaxSimultaneous">0</span>
-            <span class="kpi-sub mono">Simultaneous targets</span>
+            <span class="kpi-sub mono" id="statMaxSimultaneousSub">—</span>
           </div>
         </div>
 

@@ -33,7 +33,7 @@ globalThis.chrome = {
   }
 };
 
-const { migrateSettings } = await import('../background.js');
+const { migrateSettings, calculatePeakTraffic } = await import('../background.js');
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +91,26 @@ assert(emptyMigrated.schemaVersion === 5, 'Null raw settings returns schema v5 d
 assert(emptyMigrated.showAircraftPhotos === false, 'Default showAircraftPhotos is false on null');
 assert(emptyMigrated.radarOrientation === 'facing_up', 'Default radarOrientation is facing_up on null');
 assert(emptyMigrated.latitude === 21.1458, 'Default latitude returned');
+
+console.log('\n--- 3. Peak Simultaneous Traffic Stat ---');
+const testFlights = [
+  { id: 'f1', distance: 8.5 },
+  { id: 'f2', distance: 14.0 },
+  { id: 'f3', distance: 22.0 } // Outside 15 km user radius
+];
+
+// Mock flights must never update peak
+const mockPeak = calculatePeakTraffic(testFlights, 15, 0, true, 1700000000000);
+assert(mockPeak === null, 'Mock flights never update peak simultaneous stat');
+
+// Count only within user radiusKm (not 1.5x fetch radius)
+const realPeak = calculatePeakTraffic(testFlights, 15, 0, false, 1700000000000);
+assert(realPeak !== null && realPeak.maxSimultaneousPlanes === 2, 'Counts only aircraft inside detection radius (2 inside, 1 outside)');
+assert(realPeak.maxSimultaneousAt === 1700000000000, 'Records timestamp when peak was updated');
+
+// Does not overwrite when current count is lower than or equal to existing peak
+const lowerPeak = calculatePeakTraffic(testFlights, 15, 3, false, 1700000000000);
+assert(lowerPeak === null, 'Does not update peak when count is less than existing peak');
 
 
 console.log('\n========================================');

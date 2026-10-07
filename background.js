@@ -88,6 +88,22 @@ export function migrateSettings(rawSettings) {
   return { ...DEFAULTS, ...migrated };
 }
 
+/**
+ * Pure helper to compute updated peak simultaneous flights inside user detection radius.
+ * Returns null if not updated, or { maxSimultaneousPlanes, maxSimultaneousAt } if new peak reached.
+ */
+export function calculatePeakTraffic(processedFlights, radiusKm, currentPeak = 0, isMock = false, timestamp = Date.now()) {
+  if (isMock) return null;
+  const insideRadiusCount = (processedFlights || []).filter(f => (f.distance != null ? f.distance : 0) <= radiusKm).length;
+  if (insideRadiusCount > currentPeak) {
+    return {
+      maxSimultaneousPlanes: insideRadiusCount,
+      maxSimultaneousAt: timestamp
+    };
+  }
+  return null;
+}
+
 
 const POLL_ALARM_NAME = 'airvee-poll';
 const POLL_INTERVAL_MIN = 0.5;
@@ -360,13 +376,7 @@ async function pollFlights() {
 
   const providerStatus = getProviderStatus(Boolean(settings.mockProviderEnabled));
 
-  // ---- Update Max Simultaneous Traffic ----
-  try {
-    const { maxSimultaneousPlanes = 0 } = await chrome.storage.local.get('maxSimultaneousPlanes');
-    if (rawFlights.length > maxSimultaneousPlanes) {
-      await chrome.storage.local.set({ maxSimultaneousPlanes: rawFlights.length });
-    }
-  } catch (e) {}
+
 
   // Solar calculation (pure math) & Cloud Cover (cached 30 min from Open-Meteo)
   const sunElevation = calculateSunElevation(latitude, longitude, new Date());
@@ -561,6 +571,17 @@ async function pollFlights() {
     p => p.isInbound && p.tCpa > 0 && p.tCpa <= 360 && p.dCpa <= (radiusKm * 2)
   );
   updateAdaptivePolling(hasInboundTarget);
+
+  // ---- Update Max Simultaneous Traffic (real flights inside detection radius only) ----
+  if (!settings.mockProviderEnabled) {
+    try {
+      const { maxSimultaneousPlanes = 0 } = await chrome.storage.local.get('maxSimultaneousPlanes');
+      const peakUpdate = calculatePeakTraffic(processed, radiusKm, maxSimultaneousPlanes, false);
+      if (peakUpdate) {
+        await chrome.storage.local.set(peakUpdate);
+      }
+    } catch (e) {}
+  }
 
   // Persist for the popup UI (cap at 50 for storage efficiency)
   await chrome.storage.local.set({
