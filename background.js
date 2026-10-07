@@ -19,6 +19,11 @@ import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoA
 import { recordHeartbeat } from './lib/schedule.js';
 import { calculateSunElevation, fetchCloudCover, classifyVisibility } from './lib/visibility.js';
 import { formatNotificationAirline } from './lib/airline-logos.js';
+import {
+  buildAircraftDiagnosticRecord,
+  appendPollToRingBuffer,
+  DIAGNOSTICS_STORAGE_KEY
+} from './lib/diagnostics.js';
 
 // ---- Configuration Defaults ----
 const DEFAULTS = {
@@ -175,31 +180,45 @@ const AIRLINES = {
 
 /**
  * Classify a flight as 'international', 'domestic', or 'unknown'
- * based on origin and destination IATA codes.
+ * based on origin and destination IATA codes, and returns which rule decided it.
  */
-function classifyFlight(origin, destination) {
+export function classifyFlightWithRule(origin, destination) {
   const org = (origin || '').trim().toUpperCase();
   const dst = (destination || '').trim().toUpperCase();
 
-  if (!org && !dst) return 'unknown';
+  if (!org && !dst) {
+    return { flightType: 'unknown', rule: 'missing_route_data' };
+  }
 
   const orgIsIndian = org ? INDIAN_AIRPORTS.has(org) : null;
   const dstIsIndian = dst ? INDIAN_AIRPORTS.has(dst) : null;
 
   // Both are known Indian airports → domestic
-  if (orgIsIndian === true && dstIsIndian === true) return 'domestic';
+  if (orgIsIndian === true && dstIsIndian === true) {
+    return { flightType: 'domestic', rule: 'both_indian_airports' };
+  }
 
   // At least one is known and NOT Indian → international
-  if (orgIsIndian === false || dstIsIndian === false) return 'international';
+  if (orgIsIndian === false || dstIsIndian === false) {
+    return { flightType: 'international', rule: 'foreign_airport_detected' };
+  }
 
   // One is Indian, other is empty → could be either (lean towards unknown)
   if ((orgIsIndian === true && dstIsIndian === null) ||
-      (orgIsIndian === null && dstIsIndian === true)) return 'unknown';
+      (orgIsIndian === null && dstIsIndian === true)) {
+    return { flightType: 'unknown', rule: 'single_indian_endpoint_only' };
+  }
 
   // Both are non-empty but neither is in our Indian list → likely international
-  if (org && dst && orgIsIndian === false && dstIsIndian === false) return 'international';
+  if (org && dst && orgIsIndian === false && dstIsIndian === false) {
+    return { flightType: 'international', rule: 'both_unlisted_likely_foreign' };
+  }
 
-  return 'unknown';
+  return { flightType: 'unknown', rule: 'unresolved' };
+}
+
+function classifyFlight(origin, destination) {
+  return classifyFlightWithRule(origin, destination).flightType;
 }
 
 /**
@@ -587,6 +606,93 @@ async function pollFlights() {
         await chrome.storage.local.set(peakUpdate);
       }
     } catch (e) {}
+  }
+
+  // ---- Opt-in Diagnostics Recording (active when mockProviderEnabled / 5-click toggle is on) ----
+  if (settings.mockProviderEnabled) {
+    try {
+      const diagEntries = [];
+      for (const f of rawFlights) {
+        const flightLat = f.lat != null ? f.lat : f.latitude;
+        const flightLon = f.lon != null ? f.lon : f.longitude;
+        if (flightLat == null || flightLon == null || isNaN(flightLat) || isNaN(flightLon)) {
+          diagEntries.push(buildAircraftDiagnosticRecord({
+            flight: f,
+            cpa: null,
+            passClass: 'dropped',
+            classificationResult: { flightType: 'unknown', rule: 'invalid_coordinates' },
+            droppedReason: 'invalid_coordinates'
+          }));
+          continue;
+        }
+
+        const alt = f.altitudeFt != null ? f.altitudeFt : (f.altitude || 0);
+        const spd = f.groundSpeedKt != null ? f.groundSpeedKt : (f.speed || 0);
+        const hdg = f.trackDeg != null ? f.trackDeg : (f.heading || 0);
+        const vr = f.verticalRateFpm != null ? f.verticalRateFpm : (f.verticalSpeed || 0);
+
+        const cpaRes = calculateCPA(
+          flightLat, flightLon, alt, spd, hdg, vr,
+          latitude, longitude, settings.groundElevationM || 0, radiusKm
+        );
+
+        let orig = f.origin || '';
+        let dest = f.destination || '';
+        const cachedRoute = (!orig || !dest) ? await resolveRouteFromCache(f.callsign || f.flightNumber) : null;
+        if (cachedRoute) {
+          orig = orig || cachedRoute.origin;
+          dest = dest || cachedRoute.destination;
+        }
+
+        const classRes = classifyFlightWithRule(orig, dest);
+        const passClass = classifyPass({
+          tCpa: cpaRes.tCpa,
+          dCpa: cpaRes.dCpa,
+          elevationAtCpa: cpaRes.elevationAtCpa,
+          isInbound: cpaRes.isInbound
+        }, settings);
+
+        // Check if dropped by any filter
+        let dropReason = null;
+        if (altitudeFilter === 'high' && alt < 25000) dropReason = 'altitude_filter_high';
+        else if (altitudeFilter === 'low' && alt >= 25000) dropReason = 'altitude_filter_low';
+        else if (flightFilter === 'international' && classRes.flightType === 'domestic') dropReason = 'flight_filter_international';
+        else if (flightFilter === 'domestic' && classRes.flightType === 'international') dropReason = 'flight_filter_domestic';
+        else if (settings.airlineFilter && settings.airlineFilter.trim()) {
+          const allowedAirlines = settings.airlineFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+          const icao = (f.airlineIcao || '').toUpperCase();
+          const cs = (f.callsign || '').toUpperCase();
+          if (!allowedAirlines.some(code => icao === code || cs.startsWith(code))) dropReason = 'airline_filter';
+        }
+        else if (settings.aircraftFilter && settings.aircraftFilter.trim()) {
+          const allowedTypes = settings.aircraftFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
+          const acType = (f.aircraftType || '').toUpperCase();
+          if (!allowedTypes.some(t => acType.includes(t))) dropReason = 'aircraft_filter';
+        }
+        else if (alt < (settings.minAltitudeFt != null ? settings.minAltitudeFt : 0) ||
+                 alt > (settings.maxAltitudeFt != null ? settings.maxAltitudeFt : 60000)) {
+          dropReason = 'altitude_bounds';
+        }
+
+        diagEntries.push(buildAircraftDiagnosticRecord({
+          flight: f,
+          cpa: cpaRes,
+          passClass,
+          classificationResult: classRes,
+          droppedReason: dropReason
+        }));
+      }
+
+      const { [DIAGNOSTICS_STORAGE_KEY]: existingDiagBuffer = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
+      const updatedDiagBuffer = appendPollToRingBuffer(existingDiagBuffer, {
+        pollTime: Date.now(),
+        aircraftCount: diagEntries.length,
+        aircraft: diagEntries
+      });
+      await chrome.storage.local.set({ [DIAGNOSTICS_STORAGE_KEY]: updatedDiagBuffer });
+    } catch (diagErr) {
+      console.warn('Airvee: Failed to record diagnostics:', diagErr);
+    }
   }
 
   // Persist for the popup UI (cap at 50 for storage efficiency)

@@ -32,6 +32,7 @@ import { getAirlineLogoHtml, getAirlineMonogramBadge, resolveAirlineMonogram } f
 import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoAircraft, DEFAULT_INHERENTLY_RARE_TYPES } from './lib/watchlist.js';
 import { predictLikelyFlightsToday, computeHeatmapData } from './lib/schedule.js';
 import { calculateSunElevation, classifyVisibility } from './lib/visibility.js';
+import { DIAGNOSTICS_STORAGE_KEY, verifyRedaction } from './lib/diagnostics.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -295,6 +296,10 @@ function updateMockBannerVisibility() {
   if (banner) {
     banner.style.display = currentSettings.mockProviderEnabled ? 'flex' : 'none';
   }
+  const diagControls = $('#diagnosticsControls');
+  if (diagControls) {
+    diagControls.style.display = currentSettings.mockProviderEnabled ? 'flex' : 'none';
+  }
 }
 
 // ============================================================
@@ -536,6 +541,48 @@ function bindEvents() {
           updateMockBannerVisibility();
           await triggerQuickPoll();
         });
+      }
+    });
+  }
+
+  // Export & Clear Diagnostics Buttons
+  const btnExportDiag = $('#btnExportDiagnostics');
+  if (btnExportDiag) {
+    btnExportDiag.addEventListener('click', async () => {
+      try {
+        const { [DIAGNOSTICS_STORAGE_KEY]: diagData = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
+        if (!verifyRedaction(diagData)) {
+          alert('Diagnostics redaction safety check failed: raw coordinates detected.');
+          return;
+        }
+
+        const exportPayload = {
+          exportedAt: new Date().toISOString(),
+          pollCyclesCount: diagData.length,
+          polls: diagData
+        };
+
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `airvee-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.warn('Airvee: Failed to export diagnostics:', err);
+      }
+    });
+  }
+
+  const btnClearDiag = $('#btnClearDiagnostics');
+  if (btnClearDiag) {
+    btnClearDiag.addEventListener('click', async () => {
+      if (confirm('Clear all stored diagnostics poll cycles?')) {
+        await chrome.storage.local.set({ [DIAGNOSTICS_STORAGE_KEY]: [] });
+        alert('Diagnostics buffer cleared.');
       }
     });
   }

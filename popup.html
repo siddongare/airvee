@@ -298,9 +298,13 @@
         </div>
 
 
-        <!-- Version & Secret Mock Provider Trigger -->
+        <!-- Version, Mock Mode & Diagnostics Controls -->
         <div class="settings-version-footer">
-          <span class="settings-version mono" id="settingsVersionTag" title="Click 5 times for mock data">Airvee v1.0.0</span>
+          <span class="settings-version mono" id="settingsVersionTag" title="Click 5 times for mock data & diagnostics">Airvee v1.0.0</span>
+          <div class="settings-diagnostics-bar" id="diagnosticsControls" style="display: none; margin-top: 10px; gap: 8px; justify-content: center;">
+            <button type="button" class="btn-test-rule-action mono" id="btnExportDiagnostics" style="font-size: 10px; padding: 5px 10px;">Export diagnostics</button>
+            <button type="button" class="btn-secondary-action mono" id="btnClearDiagnostics" style="font-size: 10px; padding: 5px 10px;">Clear diagnostics</button>
+          </div>
         </div>
 
       </div>

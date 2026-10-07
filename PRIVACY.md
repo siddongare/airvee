@@ -15,6 +15,7 @@ Clicking a notification opens `https://www.flightradar24.com/<callsign>` in a ne
 ## Stored on your device
 - Settings and your observer location: chrome.storage.local.
 - The flight log: IndexedDB in your browser. You can export it as CSV or clear it from the Log tab.
+- Opt-in diagnostics: stored locally only in chrome.storage.local (capped at the last 200 poll cycles). Disabled by default, contains only relative observer metrics (no absolute latitude/longitude coordinates), and is never transmitted anywhere. You can export it as JSON or clear it from Settings.
 - Uninstalling the extension removes all of it.
 
 ## Permissions
