@@ -120,16 +120,80 @@ export function updateNavIndicator() {
   }
 }
 
+function renderErrorFallback(err) {
+  const container = document.querySelector('.popup-viewport') || document.body;
+  const existing = document.getElementById('initErrorFallback');
+  if (existing) existing.remove();
+
+  const fallback = document.createElement('div');
+  fallback.id = 'initErrorFallback';
+  fallback.className = 'init-error-panel mono';
+  fallback.style.cssText = 'margin:16px; padding:14px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:8px; color:#FCA5A5; font-size:11px; line-height:1.5; z-index:9999;';
+  fallback.innerHTML = `
+    <div style="font-weight:600; margin-bottom:6px; color:#EF4444;">Something went wrong loading this view</div>
+    <div style="opacity:0.85; word-break:break-word;">${esc(err?.message || String(err))}</div>
+  `;
+  container.prepend(fallback);
+}
+
+function bindTabNavigation() {
+  $$('.main-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchTab(btn.dataset.tab);
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadSettings();
-  renderSettings();
-  bindEvents();
-  await refreshFlights();
-  updateCockpitHeader(currentActiveTab);
-  updateNavIndicator();
+  // 1. Attach tab navigation handlers FIRST so user can always switch tabs
+  try {
+    bindTabNavigation();
+  } catch (err) {
+    console.error('Airvee: Failed to bind tab navigation:', err);
+  }
+
+  // 2. Load settings
+  try {
+    await loadSettings();
+  } catch (err) {
+    console.error('Airvee: Failed to load settings:', err);
+    renderErrorFallback(err);
+  }
+
+  // 3. Render settings controls
+  try {
+    renderSettings();
+  } catch (err) {
+    console.error('Airvee: Failed to render settings:', err);
+  }
+
+  // 4. Bind interactive inputs and controls
+  try {
+    bindEvents();
+  } catch (err) {
+    console.error('Airvee: Failed to bind controls:', err);
+  }
+
+  // 5. Initial flight list refresh
+  try {
+    await refreshFlights();
+  } catch (err) {
+    console.error('Airvee: Failed to refresh flights:', err);
+    renderErrorFallback(err);
+  }
+
+  // 6. Header and nav indicator update
+  try {
+    updateCockpitHeader(currentActiveTab);
+    updateNavIndicator();
+  } catch (err) {
+    console.error('Airvee: Failed to update header/nav:', err);
+  }
 
   // Poll update every 8 seconds
-  pollInterval = setInterval(refreshFlights, 8000);
+  pollInterval = setInterval(() => {
+    refreshFlights().catch(err => console.error('Airvee: Polling error:', err));
+  }, 8000);
 
   // One-time reset for mock-contaminated peak traffic stat
   try {
@@ -144,7 +208,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {}
 
   // Live countdown ticker every 1 second
-  countdownInterval = setInterval(tickCountdowns, 1000);
+  countdownInterval = setInterval(() => {
+    try {
+      tickCountdowns();
+    } catch (err) {
+      console.error('Airvee: Countdown ticker error:', err);
+    }
+  }, 1000);
 });
 
 // ============================================================
@@ -356,13 +426,6 @@ function bindEvents() {
 
 
   $('#testChimeBtn').addEventListener('click', handleTestChime);
-
-  // Tab navigation
-  $$('.main-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      switchTab(btn.dataset.tab);
-    });
-  });
 
   // Log Search Input & Clear Button
   const logSearch = $('#logSearchInput');
@@ -1496,7 +1559,6 @@ function buildLikelyTodaySectionHtml(predictions) {
         </div>
       `;
     }).join('');
-  }
 
   const badgeCount = (predictions && predictions.length > 0) ? `${predictions.length} PREDICTED` : 'LEARNED SCHEDULE';
 
@@ -1710,18 +1772,27 @@ export async function switchTab(tabName) {
     if (el) el.classList.toggle('active', name === tabName);
   });
 
-  if (tabName === 'radar') {
-    initOrUpdateRadar();
-  } else if (popupRadarScope) {
-    popupRadarScope.stop();
+  try {
+    if (tabName === 'radar') {
+      initOrUpdateRadar();
+    } else if (popupRadarScope) {
+      popupRadarScope.stop();
+    }
+  } catch (err) {
+    console.error('Airvee: Failed to toggle radar scope:', err);
   }
 
-  if (tabName === 'log') {
-    await renderLogView();
-  } else if (tabName === 'stats') {
-    await renderStatsView();
-  } else if (tabName === 'settings') {
-    renderSettings();
+  try {
+    if (tabName === 'log') {
+      await renderLogView();
+    } else if (tabName === 'stats') {
+      await renderStatsView();
+    } else if (tabName === 'settings') {
+      renderSettings();
+    }
+  } catch (err) {
+    console.error(`Airvee: Failed to render view for ${tabName}:`, err);
+    renderErrorFallback(err);
   }
 }
 
