@@ -19,7 +19,22 @@ import {
   classifyPass,
   formatOverheadRowSubline
 } from './lib/geo.js';
-import { playAirportDoubleChime, playWavFallbackChime } from './lib/audio.js';
+import { playAirportDoubleChime, playSpecialAlertChime, playWavFallbackChime } from './lib/audio.js';
+import {
+  AIRLINES,
+  AIRCRAFT_TYPES,
+  CATEGORIES,
+  DIRECTIONS,
+  AIRLINE_GROUPS,
+  PRESETS,
+  formatRuleSentence,
+  generateRuleNameFromConditions,
+  lookupAirline,
+  lookupAircraftType,
+  getAirlineDisplayName,
+  getAircraftDisplayName
+} from './lib/names.js';
+import { evaluateAlertRules } from './lib/alerts.js';
 import {
   getFlightLogs,
   getFlightStats,
@@ -255,13 +270,15 @@ function renderSettings() {
     $('#devDiagnosticsToggle').checked = Boolean(currentSettings.diagnosticsEnabled);
   }
 
-  const rules = currentSettings.watchlistRules || [];
-  const activeCount = rules.filter(r => r.enabled !== false).length;
-  if ($('#watchlistCountDisplay')) {
-    $('#watchlistCountDisplay').textContent = `${activeCount} active · ${rules.length} total`;
-  }
-  if ($('#rareThresholdDisplay')) {
-    $('#rareThresholdDisplay').textContent = `< ${currentSettings.rareSeenThreshold || 2} passes`;
+  const alertRules = currentSettings.alertRules || [];
+  const activeAlertRules = alertRules.filter(r => r.enabled !== false).length;
+  const alertModeSummary = $('#alertsModeSummaryDisplay');
+  if (alertModeSummary) {
+    if (currentSettings.alertMode === 'chosen') {
+      alertModeSummary.textContent = `${activeAlertRules} rule${activeAlertRules === 1 ? '' : 's'} ›`;
+    } else {
+      alertModeSummary.textContent = 'All overhead ›';
+    }
   }
 
   updateMockBannerVisibility();
@@ -279,7 +296,7 @@ function updateMockBannerVisibility() {
 // ============================================================
 
 function bindEvents() {
-  bindWatchlistEvents();
+  bindAlertsEvents();
   const handleCoordInput = () => {
     const latStr = $('#latitude').value;
     const lonStr = $('#longitude').value;
@@ -1801,6 +1818,11 @@ export async function switchTab(tabName) {
     settings: $('#viewSettings')
   };
 
+  $('#viewAlerts')?.classList.remove('active');
+  $('#viewAddRuleStep1')?.classList.remove('active');
+  $('#viewAddRuleStep2')?.classList.remove('active');
+  $('#viewAddRuleStep3')?.classList.remove('active');
+
   Object.entries(views).forEach(([name, el]) => {
     if (el) el.classList.toggle('active', name === tabName);
   });
@@ -2009,207 +2031,715 @@ function sleep(ms) {
 
 
 // ============================================================
-//  Watchlist UI & Rules Manager
+//  ALERTS & 3-STEP RULE BUILDER CONTROLLER
 // ============================================================
 
-function bindWatchlistEvents() {
-  $('#rowWatchlistEditor')?.addEventListener('click', () => {
-    $('#watchlistModal').style.display = 'flex';
-    renderWatchlistRules();
-  });
+let currentStep2Category = 'airline';
+let editingRuleId = null;
+let draftRule = {
+  id: null,
+  name: '',
+  enabled: true,
+  conditions: {},
+  action: 'loud'
+};
 
-  $('#btnCloseWatchlistModal')?.addEventListener('click', () => {
-    $('#watchlistModal').style.display = 'none';
-  });
-
-  $('#rowRareThreshold')?.addEventListener('click', () => {
-    const current = currentSettings.rareSeenThreshold || 2;
-    const input = prompt('Enter sighting threshold for "Rare for me" (1 - 20 passes):', current);
-    const val = parseInt(input, 10);
-    if (!isNaN(val) && val >= 1 && val <= 20) {
-      currentSettings.rareSeenThreshold = val;
-      saveSettings();
-      renderSettings();
-      refreshFlights();
-    }
-  });
-
-  $('#btnAddNewRule')?.addEventListener('click', () => {
-    openRuleEditor(null);
-  });
-
-  $('#btnCloseRuleEditModal')?.addEventListener('click', () => {
-    $('#ruleEditModal').style.display = 'none';
-  });
-
-  $('#btnCancelRule')?.addEventListener('click', () => {
-    $('#ruleEditModal').style.display = 'none';
-  });
-
-  $('#btnSaveRule')?.addEventListener('click', () => {
-    saveRuleFromEditor();
-  });
-
-  $('#btnTestRule')?.addEventListener('click', () => {
-    const ruleData = getRuleFormData();
-    chrome.runtime.sendMessage({
-      type: 'TEST_WATCHLIST_RULE',
-      rule: ruleData
-    }).catch(() => {});
-  });
+function showSubView(viewId) {
+  $$('.view-container').forEach(el => el.classList.remove('active'));
+  $(`#${viewId}`)?.classList.add('active');
 }
 
-function renderWatchlistRules() {
-  const container = $('#watchlistRulesList');
-  if (!container) return;
+function openAlertsScreen() {
+  showSubView('viewAlerts');
+  renderAlertsScreen();
+}
 
-  const rules = currentSettings.watchlistRules || [];
+function renderAlertsScreen() {
+  const isChosen = currentSettings.alertMode === 'chosen';
+  const allBtn = $('#btnAlertModeAll');
+  const chosenBtn = $('#btnAlertModeChosen');
+  if (allBtn) {
+    allBtn.classList.toggle('active', !isChosen);
+    allBtn.setAttribute('aria-selected', !isChosen);
+  }
+  if (chosenBtn) {
+    chosenBtn.classList.toggle('active', isChosen);
+    chosenBtn.setAttribute('aria-selected', isChosen);
+  }
+
+  const allContainer = $('#alertsModeAllContainer');
+  const chosenContainer = $('#alertsModeChosenContainer');
+  if (allContainer) allContainer.style.display = isChosen ? 'none' : 'block';
+  if (chosenContainer) chosenContainer.style.display = isChosen ? 'block' : 'none';
+
+  if (isChosen) {
+    renderAlertRulesList();
+    renderDefaultAction();
+  }
+}
+
+function renderDefaultAction() {
+  const el = $('#defaultActionDisplay');
+  if (!el) return;
+  const act = currentSettings.defaultAction || 'log';
+  const label = act === 'alert' ? 'Alert ›'
+    : act === 'ignore' ? 'Ignore ›'
+    : 'Log only ›';
+  el.textContent = label;
+}
+
+function renderAlertRulesList() {
+  const listEl = $('#alertRulesList');
+  if (!listEl) return;
+
+  const rules = currentSettings.alertRules || [];
   if (rules.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state-card" style="padding: 40px 0;">
-        <div class="empty-title mono" style="font-size:14px;">No rules yet</div>
-        <div class="empty-subline mono">Add rules to alert when rare aircraft or specific types/airlines pass overhead.</div>
+    listEl.innerHTML = `
+      <div class="alerts-empty-state mono">
+        No rules yet. Overhead flights follow the Everything else setting.
       </div>
     `;
     return;
   }
 
-  container.innerHTML = rules.map((r, idx) => {
-    const criteria = [];
-    if (r.aircraftType) criteria.push(r.aircraftType);
-    if (r.airline) criteria.push(r.airline);
-    if (r.registration) criteria.push(r.registration);
-    if (r.callsignPrefix) criteria.push(r.callsignPrefix + '*');
-    if (r.cargoFilter && r.cargoFilter !== 'any') criteria.push(r.cargoFilter === 'cargo_only' ? 'Cargo' : 'Pax');
-    if (r.rareOnly) criteria.push('Rare only');
-    if (r.overheadThresholdKm) criteria.push(`${r.overheadThresholdKm}km`);
-
-    const summaryText = criteria.length > 0 ? criteria.join(' · ') : 'All flights';
-    const isChecked = r.enabled !== false;
-    const styleClass = r.alertStyle === 'special' ? 'special' : '';
-
+  listEl.innerHTML = rules.map(rule => {
+    const { title, subtitle } = formatRuleSentence(rule);
+    const isChecked = rule.enabled !== false;
     return `
-      <div class="watchlist-rule-card" data-idx="${idx}">
-        <div class="rule-info">
-          <div class="rule-name-row">
-            <span class="rule-name">${esc(r.name || 'Rule')}</span>
-            <span class="rule-style-badge ${styleClass} mono">${esc(r.alertStyle || 'normal')}</span>
-          </div>
-          <span class="rule-summary mono">${esc(summaryText)}</span>
+      <div class="alert-rule-row" data-rule-id="${esc(rule.id)}">
+        <div class="alert-rule-content">
+          <span class="alert-rule-title">${esc(title)}</span>
+          <span class="alert-rule-subtitle mono">${esc(subtitle)}</span>
         </div>
-        <div class="rule-actions">
-          <label class="ios-switch" style="width:34px; height:20px;">
-            <input type="checkbox" class="rule-toggle-checkbox" data-idx="${idx}" ${isChecked ? 'checked' : ''}>
-            <span class="ios-track"></span>
-          </label>
-          <button class="btn-icon-rule btn-edit-rule mono" data-idx="${idx}" title="Edit">✎</button>
-          <button class="btn-icon-rule btn-del-rule mono" data-idx="${idx}" title="Delete">✕</button>
-        </div>
+        <label class="ios-switch rule-switch-label" onclick="event.stopPropagation();">
+          <input type="checkbox" class="rule-enable-toggle" data-rule-id="${esc(rule.id)}" ${isChecked ? 'checked' : ''} aria-label="Toggle rule ${esc(title)}">
+          <span class="ios-track"></span>
+        </label>
       </div>
     `;
   }).join('');
 
-  // Attach card action listeners
-  container.querySelectorAll('.rule-toggle-checkbox').forEach(cb => {
-    cb.addEventListener('change', (e) => {
-      const idx = parseInt(cb.dataset.idx, 10);
-      if (currentSettings.watchlistRules[idx]) {
-        currentSettings.watchlistRules[idx].enabled = e.target.checked;
-        saveSettings();
-        renderSettings();
-        refreshFlights();
-      }
+  listEl.querySelectorAll('.alert-rule-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const ruleId = row.dataset.ruleId;
+      openRuleEditor(ruleId);
     });
   });
 
-  container.querySelectorAll('.btn-edit-rule').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.idx, 10);
-      const r = currentSettings.watchlistRules[idx];
-      if (r) openRuleEditor({ ...r, _editIdx: idx });
-    });
-  });
-
-  container.querySelectorAll('.btn-del-rule').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.idx, 10);
-      if (confirm('Delete this watchlist rule?')) {
-        currentSettings.watchlistRules.splice(idx, 1);
+  listEl.querySelectorAll('.rule-enable-toggle').forEach(toggle => {
+    toggle.addEventListener('change', (e) => {
+      const ruleId = toggle.dataset.ruleId;
+      const rule = (currentSettings.alertRules || []).find(r => r.id === ruleId);
+      if (rule) {
+        rule.enabled = toggle.checked;
         saveSettings();
-        renderWatchlistRules();
         renderSettings();
-        refreshFlights();
       }
     });
   });
 }
 
-function openRuleEditor(rule) {
-  const modal = $('#ruleEditModal');
-  if (!modal) return;
-
-  $('#ruleEditModalTitle').textContent = rule ? 'EDIT RULE' : 'NEW WATCHLIST RULE';
-  $('#ruleEditId').value = rule ? (rule._editIdx != null ? rule._editIdx : '') : '';
-  $('#ruleNameInput').value = rule ? (rule.name || '') : '';
-  $('#ruleTypeInput').value = rule ? (rule.aircraftType || '') : '';
-  $('#ruleAirlineInput').value = rule ? (rule.airline || '') : '';
-  $('#ruleRegInput').value = rule ? (rule.registration || '') : '';
-  $('#rulePrefixInput').value = rule ? (rule.callsignPrefix || '') : '';
-  $('#ruleCargoSelect').value = rule ? (rule.cargoFilter || 'any') : 'any';
-  $('#ruleAlertStyleSelect').value = rule ? (rule.alertStyle || 'special') : 'special';
-  $('#ruleRareOnlyCheckbox').checked = rule ? Boolean(rule.rareOnly) : false;
-  $('#ruleQuietHoursCheckbox').checked = rule ? Boolean(rule.ignoreQuietHours) : false;
-  $('#ruleThresholdInput').value = (rule && rule.overheadThresholdKm != null) ? rule.overheadThresholdKm : '';
-
-  modal.style.display = 'flex';
-}
-
-function getRuleFormData() {
-  const threshVal = parseInt($('#ruleThresholdInput').value, 10);
-  return {
-    id: 'rule_' + Date.now(),
-    name: $('#ruleNameInput').value.trim() || 'Custom Rule',
-    aircraftType: $('#ruleTypeInput').value.trim(),
-    airline: $('#ruleAirlineInput').value.trim(),
-    registration: $('#ruleRegInput').value.trim(),
-    callsignPrefix: $('#rulePrefixInput').value.trim(),
-    cargoFilter: $('#ruleCargoSelect').value,
-    alertStyle: $('#ruleAlertStyleSelect').value,
-    rareOnly: $('#ruleRareOnlyCheckbox').checked,
-    ignoreQuietHours: $('#ruleQuietHoursCheckbox').checked,
-    overheadThresholdKm: (!isNaN(threshVal) && threshVal > 0) ? threshVal : null,
-    enabled: true
+function openNewRuleFlow() {
+  editingRuleId = null;
+  draftRule = {
+    id: null,
+    name: '',
+    enabled: true,
+    conditions: {},
+    action: 'loud'
   };
+  showSubView('viewAddRuleStep1');
 }
 
-function saveRuleFromEditor() {
-  const editIdxStr = $('#ruleEditId').value;
-  const ruleData = getRuleFormData();
+function openRuleEditor(ruleId) {
+  const rule = (currentSettings.alertRules || []).find(r => r.id === ruleId);
+  if (!rule) return;
 
-  if (!ruleData.name) {
-    alert('Please enter a rule name.');
+  editingRuleId = ruleId;
+  draftRule = JSON.parse(JSON.stringify(rule));
+  openStep3();
+}
+
+function openStep2(category) {
+  currentStep2Category = category;
+  showSubView('viewAddRuleStep2');
+
+  const titleMap = {
+    airline: 'Airline',
+    aircraft: 'Aircraft type',
+    category: 'Category',
+    direction: 'Direction of travel',
+    route: 'Route',
+    identifier: 'Registration or callsign'
+  };
+  const titleEl = $('#step2HeaderTitle');
+  if (titleEl) titleEl.textContent = titleMap[category] || 'Condition';
+
+  const searchWrap = $('#step2SearchWrap');
+  const searchInput = $('#step2SearchInput');
+  if (searchWrap) {
+    searchWrap.style.display = (category === 'airline' || category === 'aircraft') ? 'block' : 'none';
+  }
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.placeholder = category === 'airline' ? 'Search airlines' : 'Search aircraft types';
+  }
+
+  renderStep2Chips();
+  renderStep2Options('');
+}
+
+function renderStep2Chips() {
+  const container = $('#step2ChipsContainer');
+  if (!container) return;
+
+  const chips = [];
+
+  // Airlines
+  if (Array.isArray(draftRule.conditions.airlines)) {
+    draftRule.conditions.airlines.forEach(code => {
+      const label = AIRLINE_GROUPS[code.toLowerCase()]
+        ? AIRLINE_GROUPS[code.toLowerCase()].name
+        : (getAirlineDisplayName(code) || code);
+      chips.push({ key: 'airline', val: code, label });
+    });
+  }
+
+  // Aircraft types
+  if (Array.isArray(draftRule.conditions.aircraftTypes)) {
+    draftRule.conditions.aircraftTypes.forEach(type => {
+      const label = getAircraftDisplayName(type) || type;
+      chips.push({ key: 'aircraft', val: type, label });
+    });
+  }
+
+  // Category
+  if (Array.isArray(draftRule.conditions.category)) {
+    draftRule.conditions.category.forEach(cat => {
+      const found = CATEGORIES.find(c => c.id === cat);
+      chips.push({ key: 'category', val: cat, label: found ? found.name : cat });
+    });
+  }
+
+  // Direction
+  if (Array.isArray(draftRule.conditions.direction)) {
+    draftRule.conditions.direction.forEach(dir => {
+      const found = DIRECTIONS.find(d => d.id === dir);
+      chips.push({ key: 'direction', val: dir, label: found ? found.name : `${dir}bound` });
+    });
+  }
+
+  // Route
+  if (draftRule.conditions.route) {
+    const r = draftRule.conditions.route;
+    if (r.origin || r.destination) {
+      chips.push({ key: 'route', val: 'airports', label: `${r.origin || 'Any'} → ${r.destination || 'Any'}` });
+    }
+    if (r.flightType && r.flightType !== 'any') {
+      chips.push({ key: 'route', val: 'flightType', label: r.flightType === 'international' ? 'International' : 'Domestic' });
+    }
+  }
+
+  // Identifier
+  if (draftRule.conditions.registration) {
+    chips.push({ key: 'identifier', val: 'registration', label: `Reg ${draftRule.conditions.registration}` });
+  }
+  if (draftRule.conditions.callsignPrefix) {
+    chips.push({ key: 'identifier', val: 'callsignPrefix', label: `Callsign ${draftRule.conditions.callsignPrefix}*` });
+  }
+
+  if (chips.length === 0) {
+    container.innerHTML = '';
     return;
   }
 
-  if (!currentSettings.watchlistRules) {
-    currentSettings.watchlistRules = [];
+  container.innerHTML = chips.map(c => `
+    <span class="condition-chip mono">
+      ${esc(c.label)}
+      <button type="button" class="chip-remove-btn" data-chip-key="${esc(c.key)}" data-chip-val="${esc(c.val)}" aria-label="Remove ${esc(c.label)}">×</button>
+    </span>
+  `).join('');
+
+  container.querySelectorAll('.chip-remove-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const k = btn.dataset.chipKey;
+      const v = btn.dataset.chipVal;
+      removeConditionChip(k, v);
+    });
+  });
+}
+
+function removeConditionChip(key, val) {
+  if (key === 'airline') {
+    draftRule.conditions.airlines = (draftRule.conditions.airlines || []).filter(c => c !== val);
+    if (draftRule.conditions.airlines.length === 0) delete draftRule.conditions.airlines;
+  } else if (key === 'aircraft') {
+    draftRule.conditions.aircraftTypes = (draftRule.conditions.aircraftTypes || []).filter(t => t !== val);
+    if (draftRule.conditions.aircraftTypes.length === 0) delete draftRule.conditions.aircraftTypes;
+  } else if (key === 'category') {
+    draftRule.conditions.category = (draftRule.conditions.category || []).filter(c => c !== val);
+    if (draftRule.conditions.category.length === 0) delete draftRule.conditions.category;
+  } else if (key === 'direction') {
+    draftRule.conditions.direction = (draftRule.conditions.direction || []).filter(d => d !== val);
+    if (draftRule.conditions.direction.length === 0) delete draftRule.conditions.direction;
+  } else if (key === 'route') {
+    if (val === 'airports') {
+      if (draftRule.conditions.route) {
+        delete draftRule.conditions.route.origin;
+        delete draftRule.conditions.route.destination;
+      }
+    } else if (val === 'flightType') {
+      if (draftRule.conditions.route) delete draftRule.conditions.route.flightType;
+    }
+    if (draftRule.conditions.route && Object.keys(draftRule.conditions.route).length === 0) {
+      delete draftRule.conditions.route;
+    }
+  } else if (key === 'identifier') {
+    if (val === 'registration') delete draftRule.conditions.registration;
+    if (val === 'callsignPrefix') delete draftRule.conditions.callsignPrefix;
   }
 
-  if (editIdxStr !== '' && !isNaN(parseInt(editIdxStr, 10))) {
-    const idx = parseInt(editIdxStr, 10);
-    currentSettings.watchlistRules[idx] = {
-      ...currentSettings.watchlistRules[idx],
-      ...ruleData
-    };
+  renderStep2Chips();
+  renderStep2Options($('#step2SearchInput')?.value.trim() || '');
+}
+
+function renderStep2Options(searchQuery = '') {
+  const container = $('#step2OptionsContainer');
+  if (!container) return;
+  const q = (searchQuery || '').toLowerCase();
+
+  if (currentStep2Category === 'airline') {
+    const selectedAirlines = new Set((draftRule.conditions.airlines || []).map(s => String(s).toUpperCase()));
+    const groupItems = Object.values(AIRLINE_GROUPS).filter(g =>
+      !q || g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q)
+    );
+    const airlineItems = AIRLINES.filter(a =>
+      !q || a.name.toLowerCase().includes(q) || a.icao.toLowerCase().includes(q) || a.iata.toLowerCase().includes(q)
+    );
+
+    let html = '';
+    if (groupItems.length > 0) {
+      html += groupItems.map(g => {
+        const isSel = selectedAirlines.has(g.id.toUpperCase());
+        return `
+          <div class="step2-option-row" data-type="group" data-val="${esc(g.id)}">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span class="step2-option-name">${esc(g.name)}</span>
+              <span class="mono" style="font-size:11px; color:var(--text-tertiary);">${esc(g.description)}</span>
+            </div>
+            <div class="step2-checkbox ${isSel ? 'checked' : ''}">${isSel ? '✓' : ''}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    html += airlineItems.map(a => {
+      const isSel = selectedAirlines.has(a.icao.toUpperCase()) || selectedAirlines.has(a.iata.toUpperCase());
+      return `
+        <div class="step2-option-row" data-type="airline" data-val="${esc(a.icao)}">
+          <span class="step2-option-name">${esc(a.name)} <span class="mono" style="color:var(--text-secondary);">${esc(a.iata)}</span></span>
+          <div class="step2-checkbox ${isSel ? 'checked' : ''}">${isSel ? '✓' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.step2-option-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const val = row.dataset.val;
+        if (!draftRule.conditions.airlines) draftRule.conditions.airlines = [];
+        const idx = draftRule.conditions.airlines.indexOf(val);
+        if (idx >= 0) draftRule.conditions.airlines.splice(idx, 1);
+        else draftRule.conditions.airlines.push(val);
+
+        if (draftRule.conditions.airlines.length === 0) delete draftRule.conditions.airlines;
+        renderStep2Chips();
+        renderStep2Options($('#step2SearchInput')?.value.trim() || '');
+      });
+    });
+
+  } else if (currentStep2Category === 'aircraft') {
+    const selectedTypes = new Set((draftRule.conditions.aircraftTypes || []).map(t => String(t).toUpperCase()));
+    const items = AIRCRAFT_TYPES.filter(t =>
+      !q || t.name.toLowerCase().includes(q) || t.icao.toLowerCase().includes(q)
+    );
+
+    container.innerHTML = items.map(ac => {
+      const isSel = selectedTypes.has(ac.icao.toUpperCase());
+      return `
+        <div class="step2-option-row" data-val="${esc(ac.icao)}">
+          <span class="step2-option-name">${esc(ac.name)} <span class="mono" style="color:var(--text-secondary);">${esc(ac.icao)}</span></span>
+          <div class="step2-checkbox ${isSel ? 'checked' : ''}">${isSel ? '✓' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.step2-option-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const val = row.dataset.val;
+        if (!draftRule.conditions.aircraftTypes) draftRule.conditions.aircraftTypes = [];
+        const idx = draftRule.conditions.aircraftTypes.indexOf(val);
+        if (idx >= 0) draftRule.conditions.aircraftTypes.splice(idx, 1);
+        else draftRule.conditions.aircraftTypes.push(val);
+
+        if (draftRule.conditions.aircraftTypes.length === 0) delete draftRule.conditions.aircraftTypes;
+        renderStep2Chips();
+        renderStep2Options($('#step2SearchInput')?.value.trim() || '');
+      });
+    });
+
+  } else if (currentStep2Category === 'category') {
+    const selectedCats = new Set((draftRule.conditions.category || []).map(c => String(c).toLowerCase()));
+    container.innerHTML = CATEGORIES.map(cat => {
+      const isSel = selectedCats.has(cat.id.toLowerCase());
+      return `
+        <div class="step2-option-row" data-val="${esc(cat.id)}">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span class="step2-option-name">${esc(cat.name)}</span>
+            <span class="mono" style="font-size:11px; color:var(--text-tertiary);">${esc(cat.description)}</span>
+          </div>
+          <div class="step2-checkbox ${isSel ? 'checked' : ''}">${isSel ? '✓' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.step2-option-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const val = row.dataset.val;
+        if (!draftRule.conditions.category) draftRule.conditions.category = [];
+        const idx = draftRule.conditions.category.indexOf(val);
+        if (idx >= 0) draftRule.conditions.category.splice(idx, 1);
+        else draftRule.conditions.category.push(val);
+
+        if (draftRule.conditions.category.length === 0) delete draftRule.conditions.category;
+        renderStep2Chips();
+        renderStep2Options('');
+      });
+    });
+
+  } else if (currentStep2Category === 'direction') {
+    const selectedDirs = new Set(draftRule.conditions.direction || []);
+    container.innerHTML = DIRECTIONS.map(dir => {
+      const isSel = selectedDirs.has(dir.id);
+      return `
+        <div class="step2-option-row" data-val="${esc(dir.id)}">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span class="step2-option-name">${esc(dir.name)} (${esc(dir.id)})</span>
+            <span class="mono" style="font-size:11px; color:var(--text-tertiary);">${esc(dir.heading)}</span>
+          </div>
+          <div class="step2-checkbox ${isSel ? 'checked' : ''}">${isSel ? '✓' : ''}</div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.step2-option-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const val = row.dataset.val;
+        if (!draftRule.conditions.direction) draftRule.conditions.direction = [];
+        const idx = draftRule.conditions.direction.indexOf(val);
+        if (idx >= 0) draftRule.conditions.direction.splice(idx, 1);
+        else draftRule.conditions.direction.push(val);
+
+        if (draftRule.conditions.direction.length === 0) delete draftRule.conditions.direction;
+        renderStep2Chips();
+        renderStep2Options('');
+      });
+    });
+
+  } else if (currentStep2Category === 'route') {
+    const r = draftRule.conditions.route || {};
+    container.innerHTML = `
+      <div class="step2-form-fields">
+        <div class="step2-field-group">
+          <label class="step2-field-label mono">Origin airport (IATA/ICAO)</label>
+          <input type="text" class="step2-field-input mono" id="inputRouteOrigin" placeholder="e.g. BOM or DEL" value="${esc(r.origin || '')}" autocomplete="off">
+        </div>
+        <div class="step2-field-group">
+          <label class="step2-field-label mono">Destination airport (IATA/ICAO)</label>
+          <input type="text" class="step2-field-input mono" id="inputRouteDest" placeholder="e.g. LHR or DXB" value="${esc(r.destination || '')}" autocomplete="off">
+        </div>
+        <div class="step2-field-group">
+          <label class="step2-field-label mono">Flight corridor</label>
+          <select class="settings-select mono" id="selectRouteFlightType" style="height:44px;">
+            <option value="any" ${!r.flightType || r.flightType === 'any' ? 'selected' : ''}>Any flights</option>
+            <option value="international" ${r.flightType === 'international' ? 'selected' : ''}>International flights only</option>
+            <option value="domestic" ${r.flightType === 'domestic' ? 'selected' : ''}>Domestic flights only</option>
+          </select>
+        </div>
+      </div>
+    `;
+
+  } else if (currentStep2Category === 'identifier') {
+    container.innerHTML = `
+      <div class="step2-form-fields">
+        <div class="step2-field-group">
+          <label class="step2-field-label mono">Specific registration (tail number)</label>
+          <input type="text" class="step2-field-input mono" id="inputReg" placeholder="e.g. A6-EEA or VT-EXF" value="${esc(draftRule.conditions.registration || '')}" autocomplete="off">
+        </div>
+        <div class="step2-field-group">
+          <label class="step2-field-label mono">Callsign prefix</label>
+          <input type="text" class="step2-field-input mono" id="inputCallsignPrefix" placeholder="e.g. ETH or EK39" value="${esc(draftRule.conditions.callsignPrefix || '')}" autocomplete="off">
+        </div>
+      </div>
+    `;
+  }
+}
+
+function commitStep2FormInputs() {
+  if (currentStep2Category === 'route') {
+    const orig = ($('#inputRouteOrigin')?.value || '').trim().toUpperCase();
+    const dest = ($('#inputRouteDest')?.value || '').trim().toUpperCase();
+    const ftype = $('#selectRouteFlightType')?.value || 'any';
+    if (orig || dest || (ftype && ftype !== 'any')) {
+      draftRule.conditions.route = {
+        origin: orig || undefined,
+        destination: dest || undefined,
+        flightType: ftype !== 'any' ? ftype : undefined
+      };
+    } else {
+      delete draftRule.conditions.route;
+    }
+  } else if (currentStep2Category === 'identifier') {
+    const reg = ($('#inputReg')?.value || '').trim().toUpperCase();
+    const prefix = ($('#inputCallsignPrefix')?.value || '').trim().toUpperCase();
+    if (reg) draftRule.conditions.registration = reg;
+    else delete draftRule.conditions.registration;
+    if (prefix) draftRule.conditions.callsignPrefix = prefix;
+    else delete draftRule.conditions.callsignPrefix;
+  }
+}
+
+function openStep3() {
+  showSubView('viewAddRuleStep3');
+
+  const nameInput = $('#ruleNameInput');
+  if (nameInput) {
+    if (!draftRule.name || draftRule.name === 'Rule') {
+      draftRule.name = generateRuleNameFromConditions(draftRule.conditions);
+    }
+    nameInput.value = draftRule.name;
+  }
+
+  selectActionInStep3(draftRule.action || 'loud');
+
+  const advPanel = $('#advancedOptionsPanel');
+  if (advPanel) advPanel.style.display = 'none';
+  const advChevron = $('#advancedChevron');
+  if (advChevron) advChevron.classList.remove('open');
+
+  const overheadInput = $('#ruleOverheadThresholdInput');
+  if (overheadInput) overheadInput.value = draftRule.conditions?.overheadThresholdKm || '';
+
+  const quietCheck = $('#ruleIgnoreQuietHoursInput');
+  if (quietCheck) quietCheck.checked = Boolean(draftRule.conditions?.bypassQuietHours);
+
+  const rareCheck = $('#ruleRareOnlyInput');
+  if (rareCheck) rareCheck.checked = Boolean(draftRule.conditions?.rareForMe);
+
+  const delWrap = $('#deleteRuleWrap');
+  if (delWrap) delWrap.style.display = editingRuleId ? 'block' : 'none';
+}
+
+function selectActionInStep3(action) {
+  draftRule.action = action;
+  const actions = ['Alert', 'Loud', 'Log', 'Ignore'];
+  actions.forEach(act => {
+    const isThis = act.toLowerCase() === action.toLowerCase();
+    $(`#actionRow${act}`)?.setAttribute('aria-checked', isThis);
+    $(`#radioCircle${act}`)?.classList.toggle('checked', isThis);
+  });
+}
+
+function saveAlertRule() {
+  const nameInput = $('#ruleNameInput');
+  const name = (nameInput?.value || '').trim() || generateRuleNameFromConditions(draftRule.conditions) || 'Rule';
+  draftRule.name = name;
+
+  const threshVal = parseInt($('#ruleOverheadThresholdInput')?.value, 10);
+  if (!isNaN(threshVal) && threshVal > 0) {
+    draftRule.conditions.overheadThresholdKm = threshVal;
   } else {
-    currentSettings.watchlistRules.push(ruleData);
+    delete draftRule.conditions.overheadThresholdKm;
+  }
+
+  if ($('#ruleIgnoreQuietHoursInput')?.checked) {
+    draftRule.conditions.bypassQuietHours = true;
+  } else {
+    delete draftRule.conditions.bypassQuietHours;
+  }
+
+  if ($('#ruleRareOnlyInput')?.checked) {
+    draftRule.conditions.rareForMe = true;
+  } else {
+    delete draftRule.conditions.rareForMe;
+  }
+
+  if (!currentSettings.alertRules) {
+    currentSettings.alertRules = [];
+  }
+
+  if (editingRuleId) {
+    const idx = currentSettings.alertRules.findIndex(r => r.id === editingRuleId);
+    if (idx !== -1) {
+      currentSettings.alertRules[idx] = { ...draftRule, id: editingRuleId };
+    } else {
+      currentSettings.alertRules.push({ ...draftRule, id: editingRuleId });
+    }
+  } else {
+    const newId = `rule-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    currentSettings.alertRules.push({ ...draftRule, id: newId });
   }
 
   saveSettings();
-  $('#ruleEditModal').style.display = 'none';
-  renderWatchlistRules();
   renderSettings();
-  refreshFlights();
+  showSubView('viewAlerts');
+  renderAlertsScreen();
+}
+
+function deleteRuleFromEditor() {
+  if (!editingRuleId) return;
+  currentSettings.alertRules = (currentSettings.alertRules || []).filter(r => r.id !== editingRuleId);
+  editingRuleId = null;
+  saveSettings();
+  renderSettings();
+  showSubView('viewAlerts');
+  renderAlertsScreen();
+}
+
+async function testAlertRuleAction() {
+  const btn = $('#btnTestRuleAction');
+  const origText = btn ? btn.textContent : 'Test rule';
+  if (btn) btn.textContent = 'Testing...';
+
+  const action = draftRule.action || 'loud';
+  try {
+    if (action === 'loud') {
+      await playSpecialAlertChime(90);
+    } else if (action === 'alert') {
+      await playAirportDoubleChime(80);
+    }
+  } catch (e) {}
+
+  if (btn) {
+    btn.textContent = action === 'loud' ? 'Loud chime played'
+      : action === 'alert' ? 'Chime played'
+      : action === 'log' ? 'Logged (silent)'
+      : 'Ignored (hidden)';
+    setTimeout(() => {
+      if (btn) btn.textContent = origText;
+    }, 1500);
+  }
+}
+
+function applyQuickAddPreset(presetId) {
+  const preset = PRESETS.find(p => p.id === presetId);
+  if (!preset) return;
+
+  const newRule = preset.createRule();
+  if (!currentSettings.alertRules) {
+    currentSettings.alertRules = [];
+  }
+  currentSettings.alertRules.push(newRule);
+  saveSettings();
+  renderSettings();
+  renderAlertRulesList();
+}
+
+function bindAlertsEvents() {
+  $('#rowAlertsScreen')?.addEventListener('click', () => {
+    openAlertsScreen();
+  });
+
+  $('#btnBackAlertsToSettings')?.addEventListener('click', () => {
+    showSubView('viewSettings');
+    renderSettings();
+  });
+
+  $('#btnAlertModeAll')?.addEventListener('click', () => {
+    currentSettings.alertMode = 'all';
+    saveSettings();
+    renderSettings();
+    renderAlertsScreen();
+  });
+
+  $('#btnAlertModeChosen')?.addEventListener('click', () => {
+    currentSettings.alertMode = 'chosen';
+    saveSettings();
+    renderSettings();
+    renderAlertsScreen();
+  });
+
+  $('#btnAddNewAlertRule')?.addEventListener('click', () => {
+    openNewRuleFlow();
+  });
+
+  $('#rowDefaultAction')?.addEventListener('click', () => {
+    const cycle = { log: 'alert', alert: 'ignore', ignore: 'log' };
+    currentSettings.defaultAction = cycle[currentSettings.defaultAction || 'log'] || 'log';
+    saveSettings();
+    renderDefaultAction();
+  });
+
+  $('#presetCargo')?.addEventListener('click', () => applyQuickAddPreset('cargo_only'));
+  $('#presetWideBodies')?.addEventListener('click', () => applyQuickAddPreset('wide_bodies'));
+  $('#presetRare')?.addEventListener('click', () => applyQuickAddPreset('rare_aircraft'));
+  $('#presetGulf')?.addEventListener('click', () => applyQuickAddPreset('gulf_carriers'));
+
+  $('#btnCancelAddRuleStep1')?.addEventListener('click', () => {
+    showSubView('viewAlerts');
+  });
+
+  $('#step1OptionAirline')?.addEventListener('click', () => openStep2('airline'));
+  $('#step1OptionAircraft')?.addEventListener('click', () => openStep2('aircraft'));
+  $('#step1OptionCategory')?.addEventListener('click', () => openStep2('category'));
+  $('#step1OptionDirection')?.addEventListener('click', () => openStep2('direction'));
+  $('#step1OptionRoute')?.addEventListener('click', () => openStep2('route'));
+  $('#step1OptionIdentifier')?.addEventListener('click', () => openStep2('identifier'));
+
+  $('#btnBackStep2ToStep1')?.addEventListener('click', () => {
+    showSubView('viewAddRuleStep1');
+  });
+
+  $('#step2SearchInput')?.addEventListener('input', (e) => {
+    renderStep2Options(e.target.value.trim());
+  });
+
+  $('#btnStep2Next')?.addEventListener('click', () => {
+    commitStep2FormInputs();
+    openStep3();
+  });
+
+  $('#btnBackStep3ToStep2')?.addEventListener('click', () => {
+    openStep2(currentStep2Category);
+  });
+
+  $('#actionRowAlert')?.addEventListener('click', () => selectActionInStep3('alert'));
+  $('#actionRowLoud')?.addEventListener('click', () => selectActionInStep3('loud'));
+  $('#actionRowLog')?.addEventListener('click', () => selectActionInStep3('log'));
+  $('#actionRowIgnore')?.addEventListener('click', () => selectActionInStep3('ignore'));
+
+  $('#btnToggleAdvanced')?.addEventListener('click', () => {
+    const panel = $('#advancedOptionsPanel');
+    const chevron = $('#advancedChevron');
+    if (!panel) return;
+    const isHidden = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = isHidden ? 'block' : 'none';
+    if (chevron) chevron.classList.toggle('open', isHidden);
+  });
+
+  $('#btnDeleteRuleInEditor')?.addEventListener('click', () => {
+    deleteRuleFromEditor();
+  });
+
+  $('#btnTestRuleAction')?.addEventListener('click', () => {
+    testAlertRuleAction();
+  });
+
+  $('#btnSaveRuleAction')?.addEventListener('click', () => {
+    saveAlertRule();
+  });
 }
 
 
@@ -2228,17 +2758,18 @@ function getWatchlistTagHtml(flight, options = {}) {
     badges.push(`<span class="badge-watchlist mono ${tagClass}">${flight.watchlistTag}</span>`);
   } else {
     // Check dynamically if matches any rule
-    const rules = currentSettings.watchlistRules || [];
-    if (rules.length > 0) {
-      const match = evaluateFlightWatchlist(flight, rules, {
+    const alertRules = currentSettings.alertRules || [];
+    if (alertRules.length > 0) {
+      const evalRes = evaluateAlertRules(flight, alertRules, {
+        alertMode: currentSettings.alertMode,
+        defaultAction: currentSettings.defaultAction,
         rareSeenThreshold: currentSettings.rareSeenThreshold || 2,
-        inherentlyRareList: DEFAULT_INHERENTLY_RARE_TYPES,
         globalOverheadThresholdKm: currentSettings.overheadThresholdKm || 5
       });
-      if (match) {
-        const isRare = match.tag === 'RARE';
+      if (evalRes.matchedRule && evalRes.action !== 'ignore') {
+        const isRare = evalRes.matchedRule.tag === 'RARE' || Boolean(evalRes.matchedRule.conditions?.rareForMe);
         const tagClass = isNeutral ? 'neutral' : (isRare ? 'rare' : 'watch');
-        badges.push(`<span class="badge-watchlist mono ${tagClass}">${match.tag}</span>`);
+        badges.push(`<span class="badge-watchlist mono ${tagClass}">${esc(evalRes.matchedRule.tag || 'ALERT')}</span>`);
       }
     } else if (flight.aircraftType && isInherentlyRare(flight.aircraftType)) {
       badges.push(`<span class="badge-watchlist mono ${isNeutral ? 'neutral' : 'rare'}">RARE</span>`);

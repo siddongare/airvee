@@ -31,7 +31,14 @@ const DYNAMIC_ELEMENT_ID_ALLOWLIST = new Set([
   'btnCloseRadarTarget',
 
   // Dynamically generated error fallback banner in popup.js (in renderErrorFallback)
-  'initErrorFallback'
+  'initErrorFallback',
+
+  // Dynamically rendered inside Add Rule Step 2 condition forms (in renderStep2Options)
+  'inputRouteOrigin',
+  'inputRouteDest',
+  'selectRouteFlightType',
+  'inputReg',
+  'inputCallsignPrefix'
 ]);
 
 // Packaging allowlist from scripts/package.mjs

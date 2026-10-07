@@ -266,22 +266,13 @@
         </div>
 
         
-        <!-- WATCHLIST & RARE ALERTS -->
-        <div class="settings-group-header mono">WATCHLIST & RARE ALERTS</div>
-        <div class="settings-group">
-          <div class="settings-row clickable-row" id="rowWatchlistEditor">
-            <span class="settings-row-label">Watchlist rules</span>
-            <span class="settings-row-val mono" id="watchlistCountDisplay">0 rules</span>
-          </div>
-          <div class="settings-row clickable-row" id="rowRareThreshold">
-            <span class="settings-row-label">"Rare for me" threshold</span>
-            <span class="settings-row-val mono" id="rareThresholdDisplay">&lt; 2 passes</span>
-          </div>
-        </div>
-
         <!-- ALERTS -->
         <div class="settings-group-header mono">ALERTS</div>
         <div class="settings-group">
+          <div class="settings-row clickable-row" id="rowAlertsScreen">
+            <span class="settings-row-label">Alert rules</span>
+            <span class="settings-row-val mono" id="alertsModeSummaryDisplay">All overhead ›</span>
+          </div>
           <div class="settings-row">
             <span class="settings-row-label">Overhead alerts</span>
             <label class="ios-switch">
@@ -330,6 +321,248 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN: ALERTS (Settings > Alerts)
+         ============================================================ -->
+    <div class="view-container" id="viewAlerts" style="display: none;">
+      <div class="settings-screen-wrapper">
+        <div class="sub-screen-header">
+          <button type="button" class="sub-screen-back-btn" id="btnBackAlertsToSettings" aria-label="Back to Settings">
+            <span class="back-chevron">‹</span>
+            <span class="back-title">Alerts</span>
+          </button>
+          <span class="sub-screen-tag mono">SETTINGS</span>
+        </div>
+
+        <div class="alerts-mode-segment-bar" role="tablist">
+          <button type="button" class="alerts-mode-btn active" id="btnAlertModeAll" role="tab" aria-selected="true">Every overhead flight</button>
+          <button type="button" class="alerts-mode-btn" id="btnAlertModeChosen" role="tab" aria-selected="false">Only flights I choose</button>
+        </div>
+
+        <div class="alerts-mode-all-pane" id="alertsModeAllContainer">
+          <div class="alerts-info-card">
+            <span class="alerts-info-title mono">ALL OVERHEAD FLIGHTS</span>
+            <span class="alerts-info-text">Airvee alerts and chimes for every flight predicted to pass overhead.</span>
+          </div>
+        </div>
+
+        <div class="alerts-mode-chosen-pane" id="alertsModeChosenContainer" style="display: none;">
+          <div class="settings-group-header mono">RULES</div>
+          <div class="alert-rules-list" id="alertRulesList"></div>
+
+          <button type="button" class="btn-add-rule-row mono" id="btnAddNewAlertRule">
+            + Add rule
+          </button>
+
+          <div class="settings-group-header mono" style="margin-top: 24px;">EVERYTHING ELSE</div>
+          <div class="settings-group">
+            <div class="settings-row clickable-row" id="rowDefaultAction">
+              <span class="settings-row-label">Other overhead flights</span>
+              <span class="settings-row-val mono" id="defaultActionDisplay">Log only ›</span>
+            </div>
+          </div>
+
+          <div class="settings-group-header mono" style="margin-top: 24px;">QUICK ADD</div>
+          <div class="presets-chip-bar" id="quickAddPresetsBar">
+            <button type="button" class="preset-chip mono" id="presetCargo" data-preset="cargo_only">Cargo only</button>
+            <button type="button" class="preset-chip mono" id="presetWideBodies" data-preset="wide_bodies">Wide-bodies</button>
+            <button type="button" class="preset-chip mono" id="presetRare" data-preset="rare_aircraft">Rare aircraft</button>
+            <button type="button" class="preset-chip mono" id="presetGulf" data-preset="gulf_carriers">Gulf carriers</button>
+          </div>
+
+          <div class="alerts-footnote mono">
+            Only flights predicted to pass overhead can alert. Rules choose how.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN: ADD RULE - STEP 1 (What should this rule match?)
+         ============================================================ -->
+    <div class="view-container" id="viewAddRuleStep1" style="display: none;">
+      <div class="settings-screen-wrapper">
+        <div class="sub-screen-header">
+          <button type="button" class="sub-screen-back-btn" id="btnCancelAddRuleStep1" aria-label="Back to Alerts">
+            <span class="back-chevron">‹</span>
+            <span class="back-title">Add rule</span>
+          </button>
+          <span class="sub-screen-tag mono">STEP 1 OF 3</span>
+        </div>
+
+        <div class="step-hero-title">
+          What should this rule match?
+        </div>
+
+        <div class="settings-group match-type-group">
+          <div class="settings-row clickable-row match-type-row" id="step1OptionAirline">
+            <div class="match-type-content">
+              <span class="match-type-title">Airline</span>
+              <span class="match-type-sub mono">Emirates, Ethiopian, or a group</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+
+          <div class="settings-row clickable-row match-type-row" id="step1OptionAircraft">
+            <div class="match-type-content">
+              <span class="match-type-title">Aircraft type</span>
+              <span class="match-type-sub mono">A380, 747, A350</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+
+          <div class="settings-row clickable-row match-type-row" id="step1OptionCategory">
+            <div class="match-type-content">
+              <span class="match-type-title">Category</span>
+              <span class="match-type-sub mono">Cargo, wide-body, passenger</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+
+          <div class="settings-row clickable-row match-type-row" id="step1OptionDirection">
+            <div class="match-type-content">
+              <span class="match-type-title">Direction of travel</span>
+              <span class="match-type-sub mono">Eastbound, westbound</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+
+          <div class="settings-row clickable-row match-type-row" id="step1OptionRoute">
+            <div class="match-type-content">
+              <span class="match-type-title">Route</span>
+              <span class="match-type-sub mono">Origin or destination, if known</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+
+          <div class="settings-row clickable-row match-type-row" id="step1OptionIdentifier">
+            <div class="match-type-content">
+              <span class="match-type-title">Registration or callsign</span>
+              <span class="match-type-sub mono">A6-EEA, ETH</span>
+            </div>
+            <span class="match-type-chevron">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN: ADD RULE - STEP 2 (Search, Select & Chips)
+         ============================================================ -->
+    <div class="view-container" id="viewAddRuleStep2" style="display: none;">
+      <div class="settings-screen-wrapper">
+        <div class="sub-screen-header">
+          <button type="button" class="sub-screen-back-btn" id="btnBackStep2ToStep1" aria-label="Back to Step 1">
+            <span class="back-chevron">‹</span>
+            <span class="back-title" id="step2HeaderTitle">Airline</span>
+          </button>
+          <span class="sub-screen-tag mono">STEP 2 OF 3</span>
+        </div>
+
+        <div class="step2-search-wrap" id="step2SearchWrap">
+          <input type="text" class="step2-search-input mono" id="step2SearchInput" placeholder="Search airlines" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="step2-chips-container" id="step2ChipsContainer"></div>
+
+        <div class="step2-options-container" id="step2OptionsContainer"></div>
+
+        <div class="step-bottom-bar">
+          <button type="button" class="btn-step-next mono" id="btnStep2Next">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         SCREEN: ADD RULE - STEP 3 (Then what? Action & Advanced)
+         ============================================================ -->
+    <div class="view-container" id="viewAddRuleStep3" style="display: none;">
+      <div class="settings-screen-wrapper">
+        <div class="sub-screen-header">
+          <button type="button" class="sub-screen-back-btn" id="btnBackStep3ToStep2" aria-label="Back to Step 2">
+            <span class="back-chevron">‹</span>
+            <span class="back-title">Then what?</span>
+          </button>
+          <span class="sub-screen-tag mono">STEP 3 OF 3</span>
+        </div>
+
+        <div class="rule-name-edit-box">
+          <input type="text" class="rule-name-input" id="ruleNameInput" placeholder="Rule name" spellcheck="false">
+        </div>
+
+        <div class="action-options-group" role="radiogroup" aria-label="Alert Action">
+          <div class="action-option-row clickable-row" id="actionRowAlert" role="radio" aria-checked="false" tabindex="0">
+            <div class="action-option-info">
+              <span class="action-option-title">Alert</span>
+              <span class="action-option-desc mono">Normal chime and notification</span>
+            </div>
+            <span class="action-radio-circle" id="radioCircleAlert"></span>
+          </div>
+
+          <div class="action-option-row clickable-row" id="actionRowLoud" role="radio" aria-checked="true" tabindex="0">
+            <div class="action-option-info">
+              <span class="action-option-title">Loud alert</span>
+              <span class="action-option-desc mono">Distinct chime, marked as special</span>
+            </div>
+            <span class="action-radio-circle checked" id="radioCircleLoud"></span>
+          </div>
+
+          <div class="action-option-row clickable-row" id="actionRowLog" role="radio" aria-checked="false" tabindex="0">
+            <div class="action-option-info">
+              <span class="action-option-title">Log only</span>
+              <span class="action-option-desc mono">No notification, saved to your log</span>
+            </div>
+            <span class="action-radio-circle" id="radioCircleLog"></span>
+          </div>
+
+          <div class="action-option-row clickable-row" id="actionRowIgnore" role="radio" aria-checked="false" tabindex="0">
+            <div class="action-option-info">
+              <span class="action-option-title">Ignore</span>
+              <span class="action-option-desc mono">Hidden and not logged</span>
+            </div>
+            <span class="action-radio-circle" id="radioCircleIgnore"></span>
+          </div>
+        </div>
+
+        <div class="advanced-disclosure-row clickable-row" id="btnToggleAdvanced">
+          <span class="advanced-disclosure-label">Advanced</span>
+          <span class="advanced-disclosure-chevron" id="advancedChevron">›</span>
+        </div>
+
+        <div class="advanced-options-panel" id="advancedOptionsPanel" style="display: none;">
+          <div class="settings-group" style="margin-top: 8px;">
+            <div class="settings-row">
+              <span class="settings-row-label">Overhead distance (km)</span>
+              <input type="number" class="settings-input mono" id="ruleOverheadThresholdInput" placeholder="Default (5)" min="1" max="50">
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Ignore quiet hours</span>
+              <label class="ios-switch">
+                <input type="checkbox" id="ruleIgnoreQuietHoursInput">
+                <span class="ios-track"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Only if rare for me</span>
+              <label class="ios-switch">
+                <input type="checkbox" id="ruleRareOnlyInput">
+                <span class="ios-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="delete-rule-wrap" id="deleteRuleWrap" style="display: none; margin-top: 16px; text-align: center;">
+            <button type="button" class="btn-delete-rule mono" id="btnDeleteRuleInEditor">Delete rule</button>
+          </div>
+        </div>
+
+        <div class="step3-bottom-actions">
+          <button type="button" class="btn-step-test-rule mono" id="btnTestRuleAction">Test rule</button>
+          <button type="button" class="btn-step-save-rule mono" id="btnSaveRuleAction">Save rule</button>
+        </div>
       </div>
     </div>
 
@@ -402,107 +635,6 @@
       </button>
     </nav>
 
-
-    <!-- ====== Watchlist Manager Modal ====== -->
-    <div class="watchlist-modal-backdrop" id="watchlistModal" style="display: none;">
-      <div class="watchlist-modal-content">
-        <div class="watchlist-modal-header">
-          <span class="watchlist-modal-title mono">WATCHLIST RULES</span>
-          <button class="watchlist-close-btn" id="btnCloseWatchlistModal" title="Close">✕</button>
-        </div>
-        <div class="watchlist-modal-body" id="watchlistRulesList">
-          <!-- Rendered dynamically -->
-        </div>
-        <div class="watchlist-modal-footer">
-          <button class="btn-primary-action mono" id="btnAddNewRule">+ Add Rule</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ====== Rule Editor Sub-Modal ====== -->
-    <div class="rule-edit-modal-backdrop" id="ruleEditModal" style="display: none;">
-      <div class="rule-edit-content">
-        <div class="watchlist-modal-header">
-          <span class="watchlist-modal-title mono" id="ruleEditModalTitle">EDIT RULE</span>
-          <button class="watchlist-close-btn" id="btnCloseRuleEditModal" title="Close">✕</button>
-        </div>
-        <div class="rule-edit-form">
-          <input type="hidden" id="ruleEditId">
-
-          <div class="form-group">
-            <label class="form-label mono">Rule name</label>
-            <input type="text" id="ruleNameInput" class="form-input" placeholder="e.g. A380 Super-Heavy">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label mono">Aircraft type (ICAO, comma-separated)</label>
-            <input type="text" id="ruleTypeInput" class="form-input mono" placeholder="e.g. A388, B748, B744">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label mono">Airline (ICAO code or name)</label>
-            <input type="text" id="ruleAirlineInput" class="form-input mono" placeholder="e.g. UAE, Emirates">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label mono">Registration (optional)</label>
-            <input type="text" id="ruleRegInput" class="form-input mono" placeholder="e.g. A6-EEA">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label mono">Callsign prefix (optional)</label>
-            <input type="text" id="rulePrefixInput" class="form-input mono" placeholder="e.g. ETH, EK39">
-          </div>
-
-          <div class="form-row-2col">
-            <div class="form-group">
-              <label class="form-label mono">Category</label>
-              <select id="ruleCargoSelect" class="form-select mono">
-                <option value="any">Any flights</option>
-                <option value="cargo_only">Cargo only</option>
-                <option value="military_only">Military only</option>
-                <option value="passenger_only">Passenger only</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label mono">Alert style</label>
-              <select id="ruleAlertStyleSelect" class="form-select mono">
-                <option value="special">Special (distinct chime)</option>
-                <option value="normal">Normal chime</option>
-                <option value="silent">Silent (log only)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-check-group">
-            <label class="form-check-label">
-              <input type="checkbox" id="ruleRareOnlyCheckbox">
-              <span class="mono">Only alert if "Rare for me"</span>
-            </label>
-          </div>
-
-          <div class="form-check-group">
-            <label class="form-check-label">
-              <input type="checkbox" id="ruleQuietHoursCheckbox">
-              <span class="mono">Ignore quiet hours (always alert)</span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label mono">Overhead threshold (km, blank = default)</label>
-            <input type="number" id="ruleThresholdInput" class="form-input mono" placeholder="e.g. 12" min="1" max="50">
-          </div>
-
-          <div class="form-actions-bar">
-            <button type="button" class="btn-test-rule-action mono" id="btnTestRule">Test rule</button>
-            <div style="display:flex; gap:8px;">
-              <button type="button" class="btn-secondary-action mono" id="btnCancelRule">Cancel</button>
-              <button type="button" class="btn-primary-action mono" id="btnSaveRule">Save</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
   </div>
   <script type="module" src="popup.js"></script>
