@@ -105,49 +105,59 @@ test('Diagnostics: Summary totals match individual aircraft records accurately',
     pollingMode: 'normal',
     aircraftCount: 5,
     aircraft: [
-      // 1. Domestic, Indian airline, valid route, recent data (30s), distance 4 km (0-5 km bucket), alertRule drop (outbound)
+      // 1. Domestic, Indian airline, valid route, recent data (30s), distance 4 km (0-5 km bucket), shown, near pass
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'AIC101', airline: 'Air India', aircraftType: 'A320', origin: 'DEL', destination: 'BOM', timestamp: 1700000000 - 30 },
         cpa: { currentDistanceKm: 4.2, currentBearing: 90, dCpa: 2, tCpa: 45 },
+        shown: true,
+        hiddenBy: null,
+        alertSuppressedBy: 'not_overhead',
         passClass: 'near',
         classificationResult: { flightType: 'domestic', rule: 'both_indian_airports' },
-        droppedReason: 'alertRule',
         pollTimeMs: nowMs
       }),
-      // 2. International, foreign airline, dataAge 120s (> 60s), distance 12 km (5-15 km), dropped by flightFilter
+      // 2. International, foreign airline, dataAge 120s (> 60s), distance 12 km (5-15 km), hidden by flightFilter
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'UAE504', airline: 'Emirates', aircraftType: 'A388', origin: 'DXB', destination: 'BOM', timestamp: 1700000000 - 120 },
         cpa: { currentDistanceKm: 12.0, currentBearing: 180, dCpa: 10, tCpa: 60 },
+        shown: false,
+        hiddenBy: 'flightFilter',
+        alertSuppressedBy: 'hidden',
         passClass: 'near',
         classificationResult: { flightType: 'international', rule: 'intl_destination' },
-        droppedReason: 'flightFilter',
         pollTimeMs: nowMs
       }),
-      // 3. Unknown flightType, missing route and type, dataAge unavailable (null), distance 25 km (15-30 km), dropped by minElevation
+      // 3. Unknown flightType, missing route and type, dataAge unavailable (null), distance 25 km (15-30 km), shown, overhead but alert suppressed by minElevation
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'UNK01', airline: 'CharterX', timestamp: null },
         cpa: { currentDistanceKm: 25.5, currentBearing: 45, dCpa: 5, tCpa: 30 },
-        passClass: 'near',
+        shown: true,
+        hiddenBy: null,
+        alertSuppressedBy: 'minElevation',
+        passClass: 'overhead',
         classificationResult: { flightType: 'unknown', rule: 'no_route' },
-        droppedReason: 'minElevation',
         pollTimeMs: nowMs
       }),
-      // 4. International, distance 35 km (30-45 km), outside detection radius (30 km), dropped by other
+      // 4. International, distance 35 km (30-45 km), outside detection radius (30 km), hidden by other
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'SIA308', airline: 'Singapore Airlines', aircraftType: 'A359', origin: 'SIN', destination: 'LHR', timestamp: 1700000000 - 200 },
         cpa: { currentDistanceKm: 35.0, currentBearing: 270, dCpa: 12, tCpa: 50 },
+        shown: false,
+        hiddenBy: 'other',
+        alertSuppressedBy: 'hidden',
         passClass: 'near',
         classificationResult: { flightType: 'international', rule: 'both_foreign' },
-        droppedReason: 'other',
         pollTimeMs: nowMs
       }),
-      // 5. Domestic, distance 50 km (over 45 km), dropped by altitudeFilter
+      // 5. Domestic, distance 50 km (over 45 km), hidden by altitudeFilter
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'IGO202', airline: 'IndiGo', aircraftType: 'A20N', origin: 'DEL', destination: 'BLR', timestamp: 1700000000 - 45 },
         cpa: { currentDistanceKm: 50.2, currentBearing: 15, dCpa: 20, tCpa: 70 },
+        shown: false,
+        hiddenBy: 'altitudeFilter',
+        alertSuppressedBy: 'hidden',
         passClass: 'near',
         classificationResult: { flightType: 'domestic', rule: 'both_indian_airports' },
-        droppedReason: 'altitudeFilter',
         pollTimeMs: nowMs
       })
     ]
@@ -161,13 +171,15 @@ test('Diagnostics: Summary totals match individual aircraft records accurately',
     pollingMode: 'fast',
     aircraftCount: 1,
     aircraft: [
-      // 6. Unknown flightType, same airline CharterX, dataAge 400s (> 60, > 300), distance 18 km (15-30 km), dropped by other
+      // 6. Unknown flightType, same airline CharterX, dataAge 400s (> 60, > 300), distance 18 km (15-30 km), hidden by other
       buildAircraftDiagnosticRecord({
         flight: { callsign: 'UNK02', airline: 'CharterX', aircraftType: 'C172', origin: 'BOM', destination: null, timestamp: 1700000000 - 400 },
         cpa: { currentDistanceKm: 18.0, currentBearing: 200, dCpa: 8, tCpa: 40 },
+        shown: false,
+        hiddenBy: 'other',
+        alertSuppressedBy: 'hidden',
         passClass: 'near',
         classificationResult: { flightType: 'unknown', rule: 'partial_route' },
-        droppedReason: 'other',
         pollTimeMs: nowMs + 10000
       })
     ]
@@ -180,12 +192,19 @@ test('Diagnostics: Summary totals match individual aircraft records accurately',
   assert.equal(summary.flightTypeTotals.international, 2);
   assert.equal(summary.flightTypeTotals.unknown, 2);
 
-  // Dropped filters (each filter category counted)
-  assert.equal(summary.droppedFilterTotals.flightFilter, 1);
-  assert.equal(summary.droppedFilterTotals.altitudeFilter, 1);
-  assert.equal(summary.droppedFilterTotals.minElevation, 1);
-  assert.equal(summary.droppedFilterTotals.alertRule, 1);
-  assert.equal(summary.droppedFilterTotals.other, 2);
+  // Hidden By Totals
+  assert.equal(summary.hiddenByTotals.flightFilter, 1);
+  assert.equal(summary.hiddenByTotals.altitudeFilter, 1);
+  assert.equal(summary.hiddenByTotals.other, 2);
+
+  // Alert Suppressed By Totals
+  assert.equal(summary.alertSuppressedByTotals.not_overhead, 1);
+  assert.equal(summary.alertSuppressedByTotals.minElevation, 1);
+  assert.equal(summary.alertSuppressedByTotals.hidden, 4);
+
+  // Pass Class Totals
+  assert.equal(summary.passClassTotals.overhead, 1);
+  assert.equal(summary.passClassTotals.near, 5);
 
   // Missing fields
   // Missing origin: UNK01 (1)

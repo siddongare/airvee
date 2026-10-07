@@ -39,6 +39,7 @@ import {
   generateDiagnosticsSummary,
   migrateDiagnosticsStorage
 } from './lib/diagnostics.js';
+import { evaluateAircraft } from './lib/filter.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -938,7 +939,8 @@ async function renderFlightList() {
   const nearFlights = [];
 
   for (const f of currentFlights) {
-    const classification = f.passClassification || classifyPass(f, currentSettings);
+    const evalRes = evaluateAircraft(f, currentSettings, f);
+    const classification = evalRes.passClass;
     f.passClassification = classification;
     if (classification === 'overhead') {
       overheadFlights.push(f);

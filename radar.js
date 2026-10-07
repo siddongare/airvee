@@ -4,6 +4,7 @@
 
 import { RadarScope } from './lib/radar.js';
 import { formatLookDirection } from './lib/geo.js';
+import { evaluateAircraft } from './lib/filter.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -107,7 +108,8 @@ function renderSidebarList() {
   }
 
   container.innerHTML = currentFlights.map(f => {
-    const isOverhead = Boolean(f.passesOverhead || (f.eta != null && f.eta <= 180));
+    const evalRes = evaluateAircraft(f, currentSettings, f);
+    const isOverhead = evalRes.passClass === 'overhead';
     const etaStr = f.eta != null ? formatETA(f.eta) : '—';
     const distStr = f.distance != null ? `${f.distance}km` : '—';
     const altStr = f.altitude ? `${f.altitude.toLocaleString()}ft` : '—';

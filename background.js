@@ -24,6 +24,16 @@ import {
   saveDiagnosticPoll,
   migrateDiagnosticsStorage
 } from './lib/diagnostics.js';
+import {
+  evaluateAircraft,
+  classifyFlightWithRule,
+  classifyFlight,
+  INDIAN_AIRPORTS,
+  ETA_MIN_S,
+  ETA_MAX_S
+} from './lib/filter.js';
+
+export { classifyFlightWithRule, classifyFlight, evaluateAircraft };
 
 // ---- Configuration Defaults ----
 const DEFAULTS = {
@@ -117,113 +127,12 @@ export function calculatePeakTraffic(processedFlights, radiusKm, currentPeak = 0
 const POLL_ALARM_NAME = 'airvee-poll';
 const POLL_INTERVAL_MIN = 0.5;
 const NOTIFICATION_COOLDOWN_MS = 20 * 60 * 1000;
-const ETA_MIN_S = 90;
-const ETA_MAX_S = 150;
 
 // ---- Adaptive Polling State ----
 let fastPollTimeout = null;
 let isFastPolling = false;
 let fastPollCycles = 0;
 const MAX_FAST_POLL_CYCLES = 60; // Max ~5 mins of continuous 5-10s fast loop
-
-// ---- Comprehensive Indian Airport IATA Codes ----
-const INDIAN_AIRPORTS = new Set([
-  'AGR', 'AGX', 'AJL', 'AMD', 'ATQ', 'BBI', 'BDQ', 'BEK', 'BHJ', 'BHO',
-  'BHU', 'BKB', 'BLR', 'BOM', 'BUP', 'CCJ', 'CCU', 'CDP', 'CJB', 'COK',
-  'DAI', 'DBR', 'DDN', 'DED', 'DEL', 'DGH', 'DHM', 'DIB', 'DIU', 'DMU',
-  'GAU', 'GAY', 'GBI', 'GOI', 'GOP', 'GUX', 'GWL', 'HBX', 'HJR', 'HSS',
-  'HYD', 'IDR', 'IMF', 'ISK', 'IXA', 'IXB', 'IXC', 'IXD', 'IXE', 'IXG',
-  'IXH', 'IXI', 'IXJ', 'IXK', 'IXL', 'IXM', 'IXN', 'IXP', 'IXQ', 'IXR',
-  'IXS', 'IXU', 'IXW', 'IXY', 'IXZ', 'JAI', 'JDH', 'JGA', 'JLR', 'JRH',
-  'JSA', 'KLH', 'KNU', 'KQH', 'KTU', 'KUU', 'LDA', 'LKO', 'LUH', 'MAA',
-  'MYQ', 'NAG', 'NDC', 'NMB', 'PAB', 'PAT', 'PBD', 'PGH', 'PNQ', 'PNY',
-  'PYB', 'RAJ', 'RDP', 'REW', 'RJA', 'RPR', 'RRK', 'RTC', 'RUP', 'SAG',
-  'SHL', 'SLV', 'SSE', 'STV', 'SXR', 'TCR', 'TEI', 'TEZ', 'TIR', 'TRV',
-  'TRZ', 'UDR', 'VGA', 'VNS', 'VTZ', 'WGC', 'ZER', 'MOH', 'KJB', 'RJI',
-  'SXV', 'TJV', 'VDY', 'CBD', 'JGB', 'PUT', 'AIP', 'RGH', 'SLN', 'TNI',
-  'JRG', 'BEP', 'VGA', 'PYG', 'GOX', 'MZA', 'HGI', 'JLG', 'KBK', 'NVY',
-  'OMN', 'PCR', 'PYJ', 'RAT', 'RMD', 'STV', 'VDY', 'MZU', 'AYJ', 'CNN',
-  'RTC', 'KCG', 'SAP', 'BPM', 'HOD', 'RGH', 'SET'
-]);
-
-// ---- Airline ICAO Code → Display Name ----
-const AIRLINES = {
-  UAE: 'Emirates',       AIC: 'Air India',       AXB: 'Air India Express',
-  IGO: 'IndiGo',         SEJ: 'SpiceJet',        VTI: 'Vistara',
-  AKJ: 'Akasa Air',      THY: 'Turkish Airlines', QTR: 'Qatar Airways',
-  ETD: 'Etihad',         SIA: 'Singapore Airlines', CPA: 'Cathay Pacific',
-  BAW: 'British Airways', DLH: 'Lufthansa',       AFR: 'Air France',
-  KLM: 'KLM',            SWR: 'Swiss',            AAL: 'American Airlines',
-  UAL: 'United',          DAL: 'Delta',            JAL: 'Japan Airlines',
-  ANA: 'All Nippon',      CES: 'China Eastern',   CSN: 'China Southern',
-  CCA: 'Air China',       MAS: 'Malaysia Airlines', THA: 'Thai Airways',
-  GIA: 'Garuda',          SVA: 'Saudia',           MEA: 'Middle East Airlines',
-  ETH: 'Ethiopian',       SAA: 'South African',    KAL: 'Korean Air',
-  AAR: 'Asiana',          EVA: 'EVA Air',           HVN: 'Vietnam Airlines',
-  RAM: 'Royal Air Maroc', RYR: 'Ryanair',          EZY: 'easyJet',
-  FDB: 'flydubai',        AXM: 'AirAsia',          LNI: 'Lion Air',
-  MSR: 'EgyptAir',        PIA: 'PIA',              ALK: 'SriLankan',
-  BMA: 'Biman Bangladesh', UBD: 'US-Bangla',       RUK: 'Jazeera Airways',
-  OMA: 'Oman Air',        GUL: 'Gulf Air',         FDX: 'FedEx',
-  UPS: 'UPS Airlines',    GTI: 'Atlas Air',        CLX: 'Cargolux',
-  AHO: 'Air Hamburg',     ELY: 'El Al',            RJA: 'Royal Jordanian',
-  WZZ: 'Wizz Air',        VOZ: 'Virgin Australia', QFA: 'Qantas',
-  TAP: 'TAP Portugal',    IBE: 'Iberia',           AZA: 'ITA Airways',
-  LOT: 'LOT Polish',      CSA: 'Czech Airlines',   MAH: 'Malindo Air',
-  CAL: 'China Airlines',  PAL: 'Philippine Airlines', ANA: 'ANA',
-  CEB: 'Cebu Pacific',    BKP: 'Bangkok Airways',  MNG: 'MIAT',
-  FIN: 'Finnair',         SAS: 'SAS',              TAI: 'TACA',
-  AMX: 'Aeromexico',      AVA: 'Avianca',          LAN: 'LATAM',
-  GOW: 'Go First',        AIX: 'Air India Express', SKW: 'SkyWest'
-};
-
-
-// ============================================================
-//  Flight Type Classification
-// ============================================================
-
-/**
- * Classify a flight as 'international', 'domestic', or 'unknown'
- * based on origin and destination IATA codes, and returns which rule decided it.
- */
-export function classifyFlightWithRule(origin, destination) {
-  const org = (origin || '').trim().toUpperCase();
-  const dst = (destination || '').trim().toUpperCase();
-
-  if (!org && !dst) {
-    return { flightType: 'unknown', rule: 'missing_route_data' };
-  }
-
-  const orgIsIndian = org ? INDIAN_AIRPORTS.has(org) : null;
-  const dstIsIndian = dst ? INDIAN_AIRPORTS.has(dst) : null;
-
-  // Both are known Indian airports → domestic
-  if (orgIsIndian === true && dstIsIndian === true) {
-    return { flightType: 'domestic', rule: 'both_indian_airports' };
-  }
-
-  // At least one is known and NOT Indian → international
-  if (orgIsIndian === false || dstIsIndian === false) {
-    return { flightType: 'international', rule: 'foreign_airport_detected' };
-  }
-
-  // One is Indian, other is empty → could be either (lean towards unknown)
-  if ((orgIsIndian === true && dstIsIndian === null) ||
-      (orgIsIndian === null && dstIsIndian === true)) {
-    return { flightType: 'unknown', rule: 'single_indian_endpoint_only' };
-  }
-
-  // Both are non-empty but neither is in our Indian list → likely international
-  if (org && dst && orgIsIndian === false && dstIsIndian === false) {
-    return { flightType: 'international', rule: 'both_unlisted_likely_foreign' };
-  }
-
-  return { flightType: 'unknown', rule: 'unresolved' };
-}
-
-function classifyFlight(origin, destination) {
-  return classifyFlightWithRule(origin, destination).flightType;
-}
 
 /**
  * Try to resolve an airline name from a callsign or ICAO airline code.
@@ -422,10 +331,6 @@ async function pollFlights() {
     const heading = f.trackDeg != null ? f.trackDeg : f.heading;
     const vspeed = f.verticalRateFpm != null ? f.verticalRateFpm : (f.verticalSpeed || 0);
 
-    // Altitude filter customization
-    if (altitudeFilter === 'high' && altitude < 25000) continue;
-    if (altitudeFilter === 'low' && altitude >= 25000) continue;
-
     // Route resolution: use provider route if present, or cached callsign route (marked as likely)
     let origin = f.origin || '';
     let destination = f.destination || '';
@@ -456,34 +361,22 @@ async function pollFlights() {
       radiusKm
     );
 
-    // Flight classification
     const flightType = classifyFlight(origin, destination);
+    const enrichedFlight = {
+      ...f,
+      flightLat,
+      flightLon,
+      altitude,
+      speed,
+      heading,
+      vspeed,
+      origin,
+      destination,
+      flightType
+    };
 
-    // Apply user's flight filter
-    if (flightFilter === 'international' && flightType === 'domestic') continue;
-    if (flightFilter === 'domestic' && flightType === 'international') continue;
-
-    // Apply custom Airline filter (comma-separated ICAO codes)
-    if (settings.airlineFilter && settings.airlineFilter.trim()) {
-      const allowedAirlines = settings.airlineFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-      const icao = (f.airlineIcao || '').toUpperCase();
-      const cs = (f.callsign || '').toUpperCase();
-      const match = allowedAirlines.some(code => icao === code || cs.startsWith(code));
-      if (!match) continue;
-    }
-
-    // Apply custom Aircraft type filter (comma-separated ICAO types)
-    if (settings.aircraftFilter && settings.aircraftFilter.trim()) {
-      const allowedTypes = settings.aircraftFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-      const acType = (f.aircraftType || '').toUpperCase();
-      const match = allowedTypes.some(t => acType.includes(t));
-      if (!match) continue;
-    }
-
-    // Apply altitude bounds
-    const minAlt = settings.minAltitudeFt != null ? settings.minAltitudeFt : 0;
-    const maxAlt = settings.maxAltitudeFt != null ? settings.maxAltitudeFt : 60000;
-    if (altitude < minAlt || altitude > maxAlt) continue;
+    const evaluation = evaluateAircraft(enrichedFlight, settings, cpa);
+    if (!evaluation.shown) continue;
 
     const airline = f.airline || resolveAirline(f.callsign || f.airlineIcao, f.airlineIcao);
     const displayName = f.flightNumber || f.callsign || f.icao || f.id;
@@ -540,12 +433,8 @@ async function pollFlights() {
       currentElevation: Math.round(cpa.currentElevation),
       passesOverhead: cpa.passesOverhead,
       isInbound: cpa.isInbound,
-      passClassification: classifyPass({
-        tCpa: cpa.tCpa,
-        dCpa: cpa.dCpa,
-        elevationAtCpa: cpa.elevationAtCpa,
-        isInbound: cpa.isInbound
-      }, settings),
+      passClassification: evaluation.passClass,
+      evaluation,
       lookDirection,
       visibilityHint: visibility.hint,
       visibilityRegime: visibility.regime,
@@ -624,9 +513,11 @@ async function pollFlights() {
           diagEntries.push(buildAircraftDiagnosticRecord({
             flight: f,
             cpa: null,
-            passClass: 'dropped',
+            shown: false,
+            hiddenBy: 'invalid_coordinates',
+            alertSuppressedBy: 'hidden',
+            passClass: 'near',
             classificationResult: { flightType: 'unknown', rule: 'invalid_coordinates' },
-            droppedReason: 'other',
             pollTimeMs
           }));
           continue;
@@ -659,69 +550,21 @@ async function pollFlights() {
           continue;
         }
 
-        const passClass = classifyPass({
-          tCpa: cpaRes.tCpa,
-          dCpa: cpaRes.dCpa,
-          elevationAtCpa: cpaRes.elevationAtCpa,
-          isInbound: cpaRes.isInbound
-        }, settings);
-
-        // Determine drop reason among: flightFilter, altitudeFilter, minElevation, alertRule, other
-        let dropReason = null;
-
-        if (f.onGround || f.ground || alt < (settings.minAltitudeFt != null ? settings.minAltitudeFt : 0) ||
-            alt > (settings.maxAltitudeFt != null ? settings.maxAltitudeFt : 60000)) {
-          dropReason = 'other';
-        } else if (settings.airlineFilter && settings.airlineFilter.trim()) {
-          const allowedAirlines = settings.airlineFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-          const icao = (f.airlineIcao || '').toUpperCase();
-          const cs = (f.callsign || '').toUpperCase();
-          if (!allowedAirlines.some(code => icao === code || cs.startsWith(code))) dropReason = 'other';
-        } else if (settings.aircraftFilter && settings.aircraftFilter.trim()) {
-          const allowedTypes = settings.aircraftFilter.toUpperCase().split(',').map(s => s.trim()).filter(Boolean);
-          const acType = (f.aircraftType || '').toUpperCase();
-          if (!allowedTypes.some(t => acType.includes(t))) dropReason = 'other';
-        }
-
-        if (!dropReason && !isInsideRadius) {
-          dropReason = 'other'; // outside detection radius
-        }
-
-        if (!dropReason) {
-          if (flightFilter === 'international' && classRes.flightType === 'domestic') {
-            dropReason = 'flightFilter';
-          } else if (flightFilter === 'domestic' && classRes.flightType === 'international') {
-            dropReason = 'flightFilter';
-          }
-        }
-
-        if (!dropReason) {
-          if (altitudeFilter === 'high' && alt < 25000) {
-            dropReason = 'altitudeFilter';
-          } else if (altitudeFilter === 'low' && alt >= 25000) {
-            dropReason = 'altitudeFilter';
-          }
-        }
-
-        if (!dropReason) {
-          const minElev = settings.minElevationDeg != null ? settings.minElevationDeg : 15;
-          if (cpaRes.elevationAtCpa < minElev) {
-            dropReason = 'minElevation';
-          }
-        }
-
-        if (!dropReason) {
-          if (passClass !== 'overhead' || cpaRes.tCpa <= 0 || cpaRes.tCpa > 360) {
-            dropReason = 'alertRule';
-          }
-        }
+        const evalRes = evaluateAircraft({
+          ...f,
+          origin: orig,
+          destination: dest,
+          flightType: classRes.flightType
+        }, settings, cpaRes);
 
         diagEntries.push(buildAircraftDiagnosticRecord({
           flight: { ...f, origin: orig, destination: dest },
           cpa: cpaRes,
-          passClass,
+          shown: evalRes.shown,
+          hiddenBy: evalRes.hiddenBy,
+          alertSuppressedBy: evalRes.alertSuppressedBy,
+          passClass: evalRes.passClass,
           classificationResult: classRes,
-          droppedReason: dropReason,
           pollTimeMs
         }));
       }
@@ -771,12 +614,9 @@ async function pollFlights() {
     // Alerts apply ONLY to flights classified as "overhead"
     if (!isOverhead) continue;
 
-    if (flight.eta === null || flight.eta <= 0) continue;
-    if (flight.eta < ETA_MIN_S || flight.eta > ETA_MAX_S) continue;
-
-    // Minimum Elevation filter: avoid targets low on the horizon behind obstacles
-    const minElev = settings.minElevationDeg != null ? settings.minElevationDeg : 15;
-    if (flight.elevationAtCpa < minElev) continue;
+    // Evaluate alert eligibility using the shared decision function
+    const alertEval = evaluateAircraft(flight, settings, flight);
+    if (alertEval.alertSuppressedBy !== null) continue;
 
     // Check watchlist match
     let sightingCounts = { typeCount: 0, regCount: 0 };
@@ -800,27 +640,13 @@ async function pollFlights() {
       flight.alertStyle = watchlistMatch.alertStyle;
     }
 
-    // Determine alert eligibility
-    let shouldAlert = false;
-    let alertStyle = 'normal';
-    let ignoreQuiet = false;
-    let alertTag = '';
+    // Check if silent watchlist rule suppresses alert via evaluateAircraft
+    const alertEvalWithWatchlist = evaluateAircraft(flight, settings, flight, { watchlistMatch });
+    if (alertEvalWithWatchlist.alertSuppressedBy !== null) continue;
 
-    if (watchlistMatch) {
-      if (watchlistMatch.alertStyle === 'silent') {
-        shouldAlert = false;
-      } else {
-        shouldAlert = true;
-        alertStyle = watchlistMatch.alertStyle;
-        ignoreQuiet = Boolean(watchlistMatch.ignoreQuietHours);
-        alertTag = watchlistMatch.tag;
-      }
-    } else {
-      shouldAlert = true;
-      alertStyle = 'normal';
-    }
-
-    if (!shouldAlert) continue;
+    let alertStyle = watchlistMatch ? watchlistMatch.alertStyle : 'normal';
+    let ignoreQuiet = watchlistMatch ? Boolean(watchlistMatch.ignoreQuietHours) : false;
+    let alertTag = watchlistMatch ? watchlistMatch.tag : '';
 
     // 3. Persistent calendar-day deduplication: max 1 alert per flight per calendar day
     const alreadyNotified = await hasBeenNotifiedToday(flight.id);
