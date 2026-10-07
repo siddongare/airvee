@@ -73,7 +73,7 @@ const legacySettingsV1 = {
 
 const migrated = migrateSettings(legacySettingsV1);
 
-assert(migrated.schemaVersion === 5, 'Schema version migrated to 5');
+assert(migrated.schemaVersion === 6, 'Schema version migrated to 6');
 assert(migrated.latitude === 28.5562, 'User custom latitude preserved');
 assert(migrated.longitude === 77.1000, 'User custom longitude preserved');
 assert(migrated.radiusKm === 20, 'User radius preserved');
@@ -90,16 +90,22 @@ assert(migrated.rareSeenThreshold === 2, 'Default rareSeenThreshold initialized'
 assert(Array.isArray(migrated.watchlistRules), 'Default watchlistRules array initialized');
 assert(migrated.showAircraftPhotos === false, 'Default showAircraftPhotos initialized to false');
 assert(migrated.radarOrientation === 'facing_up', 'Default radarOrientation initialized to facing_up');
+assert(migrated.alertMode === 'all', 'Default alertMode is all');
+assert(migrated.defaultAction === 'log', 'Default defaultAction is log');
+assert(Array.isArray(migrated.alertRules), 'Default alertRules array initialized');
 
 console.log('\n--- 2. Settings Migration Handles Null/Undefined & Unified Defaults ---');
 const emptyMigrated = migrateSettings(null);
-assert(emptyMigrated.schemaVersion === 5, 'Null raw settings returns schema v5 defaults');
+assert(emptyMigrated.schemaVersion === 6, 'Null raw settings returns schema v6 defaults');
 assert(emptyMigrated.showAircraftPhotos === false, 'Default showAircraftPhotos is false on null');
 assert(emptyMigrated.radarOrientation === 'facing_up', 'Default radarOrientation is facing_up on null');
 assert(emptyMigrated.latitude === 21.1458, 'Default latitude returned');
 assert(emptyMigrated.radiusKm === 30, 'Default radiusKm is 30 on fresh install');
 assert(emptyMigrated.flightFilter === 'all', 'Default flightFilter is all on fresh install');
 assert(emptyMigrated.userFacing === '', 'Default userFacing is empty string on fresh install');
+assert(emptyMigrated.alertMode === 'all', 'Default alertMode is all on fresh install');
+assert(emptyMigrated.defaultAction === 'log', 'Default defaultAction is log on fresh install');
+assert(Array.isArray(emptyMigrated.alertRules) && emptyMigrated.alertRules.length === 0, 'Default alertRules is empty array on fresh install');
 
 console.log('\n--- 3. Preserves Existing User Settings ---');
 const savedUserSettings = {

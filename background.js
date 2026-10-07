@@ -498,6 +498,8 @@ async function pollFlights() {
           hiddenBy: evalRes.hiddenBy,
           alertSuppressedBy: evalRes.alertSuppressedBy,
           passClass: evalRes.passClass,
+          matchedRule: evalRes.matchedRule,
+          ruleAction: evalRes.action,
           classificationResult: classRes,
           pollTimeMs
         }));
@@ -548,11 +550,6 @@ async function pollFlights() {
     // Alerts apply ONLY to flights classified as "overhead"
     if (!isOverhead) continue;
 
-    // Evaluate alert eligibility using the shared decision function
-    const alertEval = evaluateAircraft(flight, settings, flight);
-    if (alertEval.alertSuppressedBy !== null) continue;
-
-    // Check watchlist match
     let sightingCounts = { typeCount: 0, regCount: 0 };
     if (!flight.isMock && flight.source !== 'mock') {
       try {
@@ -560,27 +557,20 @@ async function pollFlights() {
       } catch (e) {}
     }
 
-    const watchlistMatch = evaluateFlightWatchlist(flight, settings.watchlistRules || [], {
-      sightingCounts,
-      rareSeenThreshold: settings.rareSeenThreshold || 2,
-      inherentlyRareList: DEFAULT_INHERENTLY_RARE_TYPES,
-      globalOverheadThresholdKm: settings.overheadThresholdKm || 5
-    });
+    // Evaluate alert eligibility using the shared decision function
+    const alertEval = evaluateAircraft(flight, settings, flight, { sightingCounts });
+    if (alertEval.alertSuppressedBy !== null) continue;
 
-    if (watchlistMatch) {
+    let alertStyle = alertEval.action === 'loud' ? 'special' : 'normal';
+    let ignoreQuiet = Boolean(alertEval.bypassQuietHours);
+    let alertTag = alertEval.matchedRule ? (alertEval.matchedRule.tag || 'ALERT') : '';
+
+    if (alertEval.matchedRule) {
       flight.isWatchlist = true;
-      flight.watchlistTag = watchlistMatch.tag; // 'WATCH' or 'RARE'
-      flight.watchlistRuleName = watchlistMatch.ruleName;
-      flight.alertStyle = watchlistMatch.alertStyle;
+      flight.watchlistTag = alertTag;
+      flight.watchlistRuleName = alertEval.matchedRule.name;
+      flight.alertStyle = alertStyle;
     }
-
-    // Check if silent watchlist rule suppresses alert via evaluateAircraft
-    const alertEvalWithWatchlist = evaluateAircraft(flight, settings, flight, { watchlistMatch });
-    if (alertEvalWithWatchlist.alertSuppressedBy !== null) continue;
-
-    let alertStyle = watchlistMatch ? watchlistMatch.alertStyle : 'normal';
-    let ignoreQuiet = watchlistMatch ? Boolean(watchlistMatch.ignoreQuietHours) : false;
-    let alertTag = watchlistMatch ? watchlistMatch.tag : '';
 
     // 3. Persistent calendar-day deduplication: max 1 alert per flight per calendar day
     const alreadyNotified = await hasBeenNotifiedToday(flight.id);
@@ -612,7 +602,7 @@ async function pollFlights() {
     }
     const title = `${titlePrefix} · ${airlineName}${flightIdSuffix} in ${etaMinutes}m`;
     const newSeenStr = (flight.isNew && flight.newLabel) ? ` · First time seen: ${flight.newLabel}` : '';
-    const message = `${route}${aircraftTypeStr} · ${lookDir}${watchlistMatch ? ` · ${watchlistMatch.ruleName}` : ''}${newSeenStr}`;
+    const message = `${route}${aircraftTypeStr} · ${lookDir}${flight.watchlistRuleName ? ` · ${flight.watchlistRuleName}` : ''}${newSeenStr}`;
 
     // Notification ID format: airvee_{flightId}_{source}_{callsign} (used for deep-linking)
     const notifId = `airvee_${flight.id}_${flight.source || 'fr24'}_${encodeURIComponent(flight.callsign || flight.flightNumber || '')}`;
