@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node -c background.js offscreen.js popup.js radar.js lib/airline-logos.js lib/audio.js lib/db.js lib/geo.js lib/radar.js lib/schedule.js lib/visibility.js lib/watchlist.js providers/fr24.js providers/index.js providers/mock.js && npm test",
+    "check": "node scripts/check-wiring.mjs && node -c background.js && node -c offscreen.js && node -c popup.js && node -c radar.js && node -c lib/airline-logos.js && node -c lib/audio.js && node -c lib/db.js && node -c lib/geo.js && node -c lib/radar.js && node -c lib/schedule.js && node -c lib/visibility.js && node -c lib/watchlist.js && node -c providers/fr24.js && node -c providers/index.js && node -c providers/mock.js && npm test",
     "ci": "npm run check",
     "package": "node scripts/package.mjs"
   },

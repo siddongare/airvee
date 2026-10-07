@@ -36,9 +36,10 @@ Any proposed pull request must adhere strictly to these principles:
    - Select the `airvee` repository directory
 
 3. **Run Unit Tests & Syntax Verification**:
+   The static wiring check runs in `npm run check`.
    ```bash
-   npm test       # Run all 58 unit tests
-   npm run check  # Validate syntax and run test suite
+   npm test       # Run unit tests
+   npm run check  # Validate wiring, syntax, and run test suite
    npm run ci     # Run full verification pipeline
    ```
 
