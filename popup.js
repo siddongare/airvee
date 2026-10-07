@@ -32,7 +32,7 @@ import { getAirlineLogoHtml, getAirlineMonogramBadge, resolveAirlineMonogram } f
 import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoAircraft, DEFAULT_INHERENTLY_RARE_TYPES } from './lib/watchlist.js';
 import { predictLikelyFlightsToday, computeHeatmapData } from './lib/schedule.js';
 import { calculateSunElevation, classifyVisibility } from './lib/visibility.js';
-import { DIAGNOSTICS_STORAGE_KEY, verifyRedaction } from './lib/diagnostics.js';
+import { DIAGNOSTICS_STORAGE_KEY, verifyRedaction, generateDiagnosticsSummary } from './lib/diagnostics.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -57,6 +57,7 @@ const DEFAULTS = {
   unitSpeed: 'kt',
   unitAltitude: 'ft',
   mockProviderEnabled: false,
+  diagnosticsEnabled: false,
   rareSeenThreshold: 2,
   watchlistRules: [],
   showAircraftPhotos: false,
@@ -88,6 +89,9 @@ export function migrateSettings(rawSettings) {
   }
   if (migrated.mockProviderEnabled === undefined) {
     migrated.mockProviderEnabled = false;
+  }
+  if (migrated.diagnosticsEnabled === undefined) {
+    migrated.diagnosticsEnabled = false;
   }
   if (migrated.radarOrientation === undefined) {
     migrated.radarOrientation = 'facing_up';
@@ -278,6 +282,12 @@ function renderSettings() {
   if ($('#soundEnabled')) {
     $('#soundEnabled').checked = Boolean(currentSettings.soundEnabled);
   }
+  if ($('#devMockToggle')) {
+    $('#devMockToggle').checked = Boolean(currentSettings.mockProviderEnabled);
+  }
+  if ($('#devDiagnosticsToggle')) {
+    $('#devDiagnosticsToggle').checked = Boolean(currentSettings.diagnosticsEnabled);
+  }
 
   const rules = currentSettings.watchlistRules || [];
   const activeCount = rules.filter(r => r.enabled !== false).length;
@@ -295,10 +305,6 @@ function updateMockBannerVisibility() {
   const banner = $('#mockDataBanner');
   if (banner) {
     banner.style.display = currentSettings.mockProviderEnabled ? 'flex' : 'none';
-  }
-  const diagControls = $('#diagnosticsControls');
-  if (diagControls) {
-    diagControls.style.display = currentSettings.mockProviderEnabled ? 'flex' : 'none';
   }
 }
 
@@ -524,7 +530,7 @@ function bindEvents() {
     });
   }
 
-  // Version 5-click toggle for mock mode
+  // Version 5-click reveals Developer section (remains visible until popup closes)
   const versionTag = $('#settingsVersionTag');
   if (versionTag) {
     let clickCount = 0;
@@ -536,12 +542,30 @@ function bindEvents() {
 
       if (clickCount >= 5) {
         clickCount = 0;
-        currentSettings.mockProviderEnabled = !currentSettings.mockProviderEnabled;
-        saveSettings().then(async () => {
-          updateMockBannerVisibility();
-          await triggerQuickPoll();
-        });
+        const devSec = $('#developerSection');
+        if (devSec) {
+          devSec.style.display = 'block';
+        }
       }
+    });
+  }
+
+  // Developer Section Switches
+  const devMockToggle = $('#devMockToggle');
+  if (devMockToggle) {
+    devMockToggle.addEventListener('change', async () => {
+      currentSettings.mockProviderEnabled = devMockToggle.checked;
+      await saveSettings();
+      updateMockBannerVisibility();
+      await triggerQuickPoll();
+    });
+  }
+
+  const devDiagnosticsToggle = $('#devDiagnosticsToggle');
+  if (devDiagnosticsToggle) {
+    devDiagnosticsToggle.addEventListener('change', async () => {
+      currentSettings.diagnosticsEnabled = devDiagnosticsToggle.checked;
+      await saveSettings();
     });
   }
 
@@ -551,16 +575,17 @@ function bindEvents() {
     btnExportDiag.addEventListener('click', async () => {
       try {
         const { [DIAGNOSTICS_STORAGE_KEY]: diagData = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
-        if (!verifyRedaction(diagData)) {
-          alert('Diagnostics redaction safety check failed: raw coordinates detected.');
-          return;
-        }
-
         const exportPayload = {
           exportedAt: new Date().toISOString(),
           pollCyclesCount: diagData.length,
+          summary: generateDiagnosticsSummary(diagData),
           polls: diagData
         };
+
+        if (!verifyRedaction(exportPayload)) {
+          alert('Diagnostics redaction safety check failed: raw coordinates detected.');
+          return;
+        }
 
         const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

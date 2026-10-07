@@ -298,12 +298,31 @@
         </div>
 
 
-        <!-- Version, Mock Mode & Diagnostics Controls -->
+        <!-- Version & Developer Section -->
         <div class="settings-version-footer">
-          <span class="settings-version mono" id="settingsVersionTag" title="Click 5 times for mock data & diagnostics">Airvee v1.0.0</span>
-          <div class="settings-diagnostics-bar" id="diagnosticsControls" style="display: none; margin-top: 10px; gap: 8px; justify-content: center;">
-            <button type="button" class="btn-test-rule-action mono" id="btnExportDiagnostics" style="font-size: 10px; padding: 5px 10px;">Export diagnostics</button>
-            <button type="button" class="btn-secondary-action mono" id="btnClearDiagnostics" style="font-size: 10px; padding: 5px 10px;">Clear diagnostics</button>
+          <span class="settings-version mono" id="settingsVersionTag" title="Click 5 times to reveal developer tools">Airvee v1.0.0</span>
+          <div class="developer-section" id="developerSection" style="display: none; margin-top: 14px; text-align: left;">
+            <div class="settings-group-title mono" style="font-size: 11px; margin-bottom: 6px;">DEVELOPER</div>
+            <div class="settings-group" style="margin-bottom: 8px;">
+              <div class="settings-row">
+                <span class="settings-row-label">Mock data</span>
+                <label class="ios-switch">
+                  <input type="checkbox" id="devMockToggle">
+                  <span class="ios-track"></span>
+                </label>
+              </div>
+              <div class="settings-row">
+                <span class="settings-row-label">Record diagnostics</span>
+                <label class="ios-switch">
+                  <input type="checkbox" id="devDiagnosticsToggle">
+                  <span class="ios-track"></span>
+                </label>
+              </div>
+            </div>
+            <div class="settings-diagnostics-bar" id="diagnosticsControls" style="display: flex; gap: 8px; justify-content: center; margin-top: 6px;">
+              <button type="button" class="btn-test-rule-action mono" id="btnExportDiagnostics" style="font-size: 10px; padding: 5px 10px;">Export diagnostics</button>
+              <button type="button" class="btn-secondary-action mono" id="btnClearDiagnostics" style="font-size: 10px; padding: 5px 10px;">Clear diagnostics</button>
+            </div>
           </div>
         </div>
 

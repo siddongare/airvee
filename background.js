@@ -52,6 +52,7 @@ const DEFAULTS = {
   minAltitudeFt: 0,
   maxAltitudeFt: 60000,
   mockProviderEnabled: false,   // Hidden debug mock data provider
+  diagnosticsEnabled: false,    // Opt-in real provider diagnostic telemetry
   rareSeenThreshold: 2,         // Number of times seen in log to count as rare
   watchlistRules: [],           // Array of watchlist rules
   showAircraftPhotos: false,    // Legacy key retained for schema migration stability
@@ -85,6 +86,9 @@ export function migrateSettings(rawSettings) {
   }
   if (migrated.mockProviderEnabled === undefined) {
     migrated.mockProviderEnabled = false;
+  }
+  if (migrated.diagnosticsEnabled === undefined) {
+    migrated.diagnosticsEnabled = false;
   }
   if (migrated.radarOrientation === undefined) {
     migrated.radarOrientation = 'facing_up';
@@ -608,9 +612,10 @@ async function pollFlights() {
     } catch (e) {}
   }
 
-  // ---- Opt-in Diagnostics Recording (active when mockProviderEnabled / 5-click toggle is on) ----
-  if (settings.mockProviderEnabled) {
+  // ---- Opt-in Diagnostics Recording (active ONLY for real provider traffic when diagnosticsEnabled is true) ----
+  if (settings.diagnosticsEnabled && !settings.mockProviderEnabled) {
     try {
+      const pollTimeMs = Date.now();
       const diagEntries = [];
       for (const f of rawFlights) {
         const flightLat = f.lat != null ? f.lat : f.latitude;
@@ -621,7 +626,8 @@ async function pollFlights() {
             cpa: null,
             passClass: 'dropped',
             classificationResult: { flightType: 'unknown', rule: 'invalid_coordinates' },
-            droppedReason: 'invalid_coordinates'
+            droppedReason: 'invalid_coordinates',
+            pollTimeMs
           }));
           continue;
         }
@@ -675,17 +681,21 @@ async function pollFlights() {
         }
 
         diagEntries.push(buildAircraftDiagnosticRecord({
-          flight: f,
+          flight: { ...f, origin: orig, destination: dest },
           cpa: cpaRes,
           passClass,
           classificationResult: classRes,
-          droppedReason: dropReason
+          droppedReason: dropReason,
+          pollTimeMs
         }));
       }
 
       const { [DIAGNOSTICS_STORAGE_KEY]: existingDiagBuffer = [] } = await chrome.storage.local.get(DIAGNOSTICS_STORAGE_KEY);
       const updatedDiagBuffer = appendPollToRingBuffer(existingDiagBuffer, {
-        pollTime: Date.now(),
+        pollTime: pollTimeMs,
+        provider: settings.mockProviderEnabled ? 'mock' : (providerStatus.activeProvider || 'fr24'),
+        rawAircraftCount: rawFlights.length,
+        pollingMode: isFastPolling ? 'fast' : 'normal',
         aircraftCount: diagEntries.length,
         aircraft: diagEntries
       });

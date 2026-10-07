@@ -31,10 +31,10 @@ I built it with AI coding tools and then tested, reviewed and reshaped it myself
 1. Clone or download this repository.
 2. Open chrome://extensions, turn on Developer mode, choose Load unpacked, and select the folder that contains manifest.json.
 3. Open the popup, go to Settings, and enter your latitude, longitude and the direction you face.
-To test without live flights, click the version tag in Settings 5 times to turn on simulated mock flights.
+To test without live flights, click the version tag in Settings 5 times to reveal the Developer section, then turn on "Mock data".
 
 ## Develop
-- `npm test` runs the test suite (58 passing tests).
+- `npm test` runs the test suite.
 - `npm run check` runs a syntax check and the tests.
 
 ## Data and privacy
