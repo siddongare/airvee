@@ -11,7 +11,7 @@ Airvee has no server, no accounts, no analytics and no advertising. Your locatio
 
 The flight-data provider necessarily learns your approximate area, because that is how a "flights near me" query works. Every service you contact also sees your IP address, as with any website. Airvee itself never receives any of this data.
 
-Clicking a notification opens a public flight tracking page in a new tab. For Flightradar24 flights, it opens `https://www.flightradar24.com/<callsign>`. If adsb.lol is configured, it opens `https://globe.adsb.lol/?callsign=<callsign>`. The URL contains only the aircraft callsign (for example UAE504). It never contains your location or coordinates.
+Clicking a notification opens `https://www.flightradar24.com/<callsign>` in a new tab. The URL contains only the aircraft callsign (for example UAE504). It never contains your location or coordinates.
 
 ## Stored on your device
 - Settings and your observer location: chrome.storage.local.
