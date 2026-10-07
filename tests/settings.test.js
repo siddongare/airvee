@@ -99,7 +99,7 @@ assert(emptyMigrated.radarOrientation === 'facing_up', 'Default radarOrientation
 assert(emptyMigrated.latitude === 21.1458, 'Default latitude returned');
 assert(emptyMigrated.radiusKm === 30, 'Default radiusKm is 30 on fresh install');
 assert(emptyMigrated.flightFilter === 'all', 'Default flightFilter is all on fresh install');
-assert(emptyMigrated.userFacing === 'S', 'Default userFacing is S on fresh install');
+assert(emptyMigrated.userFacing === '', 'Default userFacing is empty string on fresh install');
 
 console.log('\n--- 3. Preserves Existing User Settings ---');
 const savedUserSettings = {
@@ -115,6 +115,9 @@ assert(migratedSaved.radiusKm === 15, 'Existing saved radiusKm of 15 is strictly
 assert(migratedSaved.flightFilter === 'international', 'Existing saved flightFilter of international is strictly preserved');
 assert(migratedSaved.userFacing === 'NW', 'Existing saved userFacing is strictly preserved');
 assert(migratedSaved.latitude === 19.0760, 'Existing saved latitude is strictly preserved');
+
+const savedUserFacingS = migrateSettings({ schemaVersion: 5, userFacing: 'S' });
+assert(savedUserFacingS.userFacing === 'S', 'Existing saved userFacing S is strictly preserved');
 
 console.log('\n--- 4. All Contexts Share Identical Defaults ---');
 const defaultsFromLib = (await import('../lib/settings-defaults.js')).DEFAULTS;
@@ -143,6 +146,57 @@ assert(realPeak.maxSimultaneousAt === 1700000000000, 'Records timestamp when pea
 const lowerPeak = calculatePeakTraffic(testFlights, 15, 3, false, 1700000000000);
 assert(lowerPeak === null, 'Does not update peak when count is less than existing peak');
 
+console.log('\n--- 6. userFacing Behaviors (Empty vs Configured) ---');
+const { formatLookDirection } = await import('../lib/geo.js');
+const { formatHeroLook } = await import('../popup.js');
+const { RadarScope } = await import('../lib/radar.js');
+
+// Notification look text: '' gives compass-only text; 'S' gives relative wording
+const notifEmpty = formatLookDirection(315, 23, '');
+assert(notifEmpty === 'Look NW, 23° up', `Empty userFacing gives compass-only text in notification: got "${notifEmpty}"`);
+const notifS = formatLookDirection(315, 23, 'S');
+assert(notifS === 'Look NW (behind-right), 23° up', `userFacing S gives relative wording in notification: got "${notifS}"`);
+
+// Hero card look text: '' gives compass-only text (empty relText); 'S' gives relative wording
+const heroEmpty = formatHeroLook(315, 23, '');
+assert(heroEmpty.anglesText === 'NW  ·  23°  up' && heroEmpty.relText === '', `Empty userFacing gives compass-only text in hero: got angles="${heroEmpty.anglesText}", rel="${heroEmpty.relText}"`);
+const heroS = formatHeroLook(315, 23, 'S');
+assert(heroS.anglesText === 'NW  ·  23°  up' && heroS.relText === 'Behind-right', `userFacing S gives relative wording in hero: got rel="${heroS.relText}"`);
+
+// Radar does not crash with '' and defaults to north-up without facing wedge
+const dummyCanvas = {
+  getContext: () => ({
+    setTransform: () => {},
+    clearRect: () => {},
+    fillRect: () => {},
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    save: () => {},
+    restore: () => {},
+    beginPath: () => {},
+    arc: () => {},
+    clip: () => {},
+    fill: () => {},
+    stroke: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    closePath: () => {},
+    setLineDash: () => {},
+    fillText: () => {}
+  }),
+  addEventListener: () => {},
+  getBoundingClientRect: () => ({ width: 340, height: 340 })
+};
+let radarInitOk = false;
+try {
+  const scope = new RadarScope(dummyCanvas, { userFacing: '' });
+  assert(scope._getFacingDeg() === null, 'Radar facing deg is null when userFacing is empty');
+  assert(scope._getRotationOffsetDeg() === 0, 'Radar rotation offset is 0 (north-up) when userFacing is empty');
+  scope._render(100);
+  radarInitOk = true;
+} catch (e) {
+  console.error(e);
+}
+assert(radarInitOk, 'Radar initializes, projects, and renders without crashing with empty userFacing');
 
 console.log('\n========================================');
 console.log(`SETTINGS TEST SUMMARY: ${passed} passed, ${failed} failed.`);

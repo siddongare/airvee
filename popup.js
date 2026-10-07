@@ -48,6 +48,18 @@ import {
 
 export { migrateSettings, DEFAULTS, SCHEMA_VERSION };
 
+export function formatHeroLook(bearingVal, elevationVal, userFacing) {
+  const elev = (typeof elevationVal === 'number' && !isNaN(elevationVal)) ? Math.max(0, Math.round(elevationVal)) : 25;
+  if (elev >= 80) {
+    return { anglesText: 'Straight up', relText: '' };
+  }
+  const compassWord = bearingToCompass(bearingVal, false);
+  const anglesText = `${compassWord}  ·  ${elev}°  up`;
+  const rel = userFacing ? getRelativeDirection(bearingVal, userFacing) : null;
+  const relText = rel ? capitalize(rel) : '';
+  return { anglesText, relText };
+}
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -206,9 +218,11 @@ function renderSettings() {
     $('#longitude').value = formatCoordinateForDisplay(currentSettings.longitude);
   }
   if ($('#userFacing')) {
-    $('#userFacing').value = currentSettings.userFacing || 'S';
-    const facingLabel = $('#radarFacingLabel');
-    if (facingLabel) facingLabel.textContent = currentSettings.userFacing || 'S';
+    $('#userFacing').value = currentSettings.userFacing || '';
+    const hintEl = $('#userFacingHint');
+    if (hintEl) {
+      hintEl.style.display = (!currentSettings.userFacing) ? 'block' : 'none';
+    }
   }
   if ($('#radiusDisplay')) {
     $('#radiusDisplay').textContent = `${currentSettings.radiusKm} km`;
@@ -216,16 +230,17 @@ function renderSettings() {
   if ($('#overheadThresholdDisplay')) {
     $('#overheadThresholdDisplay').textContent = `${currentSettings.overheadThresholdKm} km`;
   }
+  const isNorthUp = currentSettings.radarOrientation === 'north_up' || !currentSettings.userFacing;
   if ($('#radarOrientationDisplay')) {
-    $('#radarOrientationDisplay').textContent = currentSettings.radarOrientation === 'north_up'
+    $('#radarOrientationDisplay').textContent = isNorthUp
       ? 'North up (0°)'
-      : `Facing up (${currentSettings.userFacing || 'S'})`;
+      : `Facing up (${currentSettings.userFacing})`;
   }
   const facingLabel = $('#radarFacingLabel');
   if (facingLabel) {
-    facingLabel.textContent = currentSettings.radarOrientation === 'north_up'
+    facingLabel.textContent = isNorthUp
       ? 'NORTH UP (N)'
-      : `FACING UP (${currentSettings.userFacing || 'S'})`;
+      : `FACING UP (${currentSettings.userFacing})`;
   }
   if ($('#alertsEnabled')) {
     $('#alertsEnabled').checked = Boolean(currentSettings.alertsEnabled);
@@ -661,18 +676,11 @@ function tickCountdowns() {
         const lookAngles = $('#heroLookAngles');
         const lookRel = $('#heroLookRelative');
         const rawElev = hf.elevationAtCpa != null ? hf.elevationAtCpa : hf.currentElevation;
-        const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-
-        if (elev >= 80) {
-          if (lookAngles) lookAngles.textContent = 'Straight up';
-          if (lookRel) lookRel.textContent = '';
-        } else {
-          const compass = bearingToCompass(bearingVal, false);
-          if (lookAngles) lookAngles.textContent = `${compass}  ·  ${elev}°  up`;
-          if (lookRel) {
-            const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'in front of you';
-            lookRel.textContent = capitalize(rel);
-          }
+        const { anglesText, relText } = formatHeroLook(bearingVal, rawElev, currentSettings.userFacing);
+        if (lookAngles) lookAngles.textContent = anglesText;
+        if (lookRel) {
+          lookRel.textContent = relText;
+          lookRel.style.display = relText ? '' : 'none';
         }
       }
     }
@@ -839,7 +847,7 @@ async function renderFlightList() {
           </div>
           <div class="quiet-capsule">
             <span class="capsule-label mono">YOU FACE</span>
-            <span class="capsule-val mono">${currentSettings.userFacing || 'SOUTH'}</span>
+            <span class="capsule-val mono">${currentSettings.userFacing || 'NOT SET'}</span>
           </div>
           <div class="quiet-capsule">
             <span class="capsule-label mono">TOTAL LOG</span>
@@ -927,13 +935,8 @@ async function renderFlightList() {
     const etaText = (hero.eta !== null && hero.eta > 0) ? formatETA(hero.eta) : '';
     const isUrgent = hero.eta !== null && hero.eta > 0 && hero.eta <= 60;
     const bearingVal = (typeof hero.bearingAtCpa === 'number' && !isNaN(hero.bearingAtCpa)) ? hero.bearingAtCpa : 0;
-    const compassWord = bearingToCompass(bearingVal, false);
     const rawElev = hero.elevationAtCpa != null ? hero.elevationAtCpa : hero.currentElevation;
-    const elev = (typeof rawElev === 'number' && !isNaN(rawElev)) ? Math.max(0, Math.round(rawElev)) : 25;
-    const isStraightUp = elev >= 80;
-    const anglesText = isStraightUp ? 'Straight up' : `${compassWord}  ·  ${elev}°  up`;
-    const rel = getRelativeDirection(bearingVal, currentSettings.userFacing) || 'in front of you';
-    const relText = isStraightUp ? '' : capitalize(rel);
+    const { anglesText, relText } = formatHeroLook(bearingVal, rawElev, currentSettings.userFacing);
     const heroLogo = getAirlineMonogramBadge(hero);
     const heroVis = getFlightVisibilityInfo(hero);
 
@@ -970,7 +973,7 @@ async function renderFlightList() {
           <div class="look-meta-block">
             <div class="look-label mono">LOOK</div>
             <div class="look-angle-main mono" id="heroLookAngles">${anglesText}</div>
-            <div class="look-relative-sub" id="heroLookRelative">${relText}</div>
+            <div class="look-relative-sub" id="heroLookRelative" style="${relText ? '' : 'display: none;'}">${relText}</div>
           </div>
         </div>
 
@@ -1833,7 +1836,7 @@ function initOrUpdateRadar() {
   if (!popupRadarScope) {
     popupRadarScope = new RadarScope(canvas, {
       maxRadiusKm: currentSettings.radiusKm,
-      userFacing: currentSettings.userFacing || 'S',
+      userFacing: currentSettings.userFacing || '',
       orientation: currentSettings.radarOrientation || 'facing_up',
       units: 'km',
       onSelectFlight: (flight) => renderRadarSelectedTarget(flight)
@@ -1841,7 +1844,7 @@ function initOrUpdateRadar() {
   } else {
     popupRadarScope.setOptions({
       maxRadiusKm: currentSettings.radiusKm,
-      userFacing: currentSettings.userFacing || 'S',
+      userFacing: currentSettings.userFacing || '',
       orientation: currentSettings.radarOrientation || 'facing_up'
     });
     popupRadarScope._setupCanvas();

@@ -1445,6 +1445,15 @@ html, body {
   transition: color 0.15s ease;
 }
 
+.settings-hint-row {
+  padding: 8px 14px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-hairline);
+  background: rgba(255, 255, 255, 0.015);
+}
+
 .settings-input {
   width: 125px;
   height: 28px;

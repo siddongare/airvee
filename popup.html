@@ -62,7 +62,7 @@
           </div>
           <button class="legend-orientation-toggle mono" id="btnRadarOrientation" title="Toggle Orientation (Facing Up vs North Up)">
             <span class="legend-cone-symbol">▲</span>
-            <span class="legend-text-facing" id="radarFacingLabel">FACING UP (S)</span>
+            <span class="legend-text-facing" id="radarFacingLabel">NORTH UP (N)</span>
           </button>
         </div>
 
@@ -232,19 +232,23 @@
           <div class="settings-row">
             <span class="settings-row-label">I face</span>
             <select class="settings-select mono" id="userFacing">
+              <option value="" selected>Not set</option>
               <option value="N">North (0°)</option>
               <option value="NE">Northeast (45°)</option>
               <option value="E">East (90°)</option>
               <option value="SE">Southeast (135°)</option>
-              <option value="S" selected>South (180°)</option>
+              <option value="S">South (180°)</option>
               <option value="SW">Southwest (225°)</option>
               <option value="W">West (270°)</option>
               <option value="NW">Northwest (315°)</option>
             </select>
           </div>
+          <div class="settings-hint-row mono" id="userFacingHint">
+            Set the direction your window faces to get &apos;in front of you / to your left&apos; hints.
+          </div>
           <div class="settings-row clickable-row" id="rowRadarOrientation">
             <span class="settings-row-label">Radar orientation</span>
-            <span class="settings-row-val mono" id="radarOrientationDisplay">Facing up</span>
+            <span class="settings-row-val mono" id="radarOrientationDisplay">North up (0°)</span>
           </div>
         </div>
 
