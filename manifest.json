@@ -8,14 +8,10 @@
     "notifications",
     "storage",
     "unlimitedStorage",
-    "offscreen",
-    "sidePanel"
+    "offscreen"
   ],
   "host_permissions": [
     "https://data-cloud.flightradar24.com/*",
-    "https://opensky-network.org/*",
-    "https://ipwho.is/*",
-    "https://ipapi.co/*",
     "https://api.open-meteo.com/*",
     "https://api.planespotters.net/*",
     "https://*.plnspttrs.net/*"
