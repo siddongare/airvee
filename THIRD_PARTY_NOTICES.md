@@ -15,4 +15,4 @@ Airvee bundles or interfaces with the following open-source software, fonts, and
 
 ## 3. Data Services & APIs
 - **Open-Meteo**: Weather forecast and cloud cover data provided under Creative Commons Attribution 4.0 International (CC BY 4.0). Terms: https://open-meteo.com/en/terms.
-- **Planespotters.net**: Aircraft photo index API used under Planespotters.net API Terms of Service with mandatory photographer attribution. Terms: https://www.planespotters.net/.
+

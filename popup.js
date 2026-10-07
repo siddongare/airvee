@@ -30,7 +30,6 @@ import { getAirlineLogoHtml, getAirlineMonogramBadge, resolveAirlineMonogram } f
 import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoAircraft, DEFAULT_INHERENTLY_RARE_TYPES } from './lib/watchlist.js';
 import { predictLikelyFlightsToday, computeHeatmapData } from './lib/schedule.js';
 import { calculateSunElevation, classifyVisibility } from './lib/visibility.js';
-import { fetchAircraftPhoto, formatPhotoAttribution } from './lib/photos.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -206,9 +205,6 @@ function renderSettings() {
   if ($('#soundEnabled')) {
     $('#soundEnabled').checked = Boolean(currentSettings.soundEnabled);
   }
-  if ($('#showAircraftPhotos')) {
-    $('#showAircraftPhotos').checked = Boolean(currentSettings.showAircraftPhotos);
-  }
 
   const rules = currentSettings.watchlistRules || [];
   const activeCount = rules.filter(r => r.enabled !== false).length;
@@ -356,24 +352,6 @@ function bindEvents() {
     saveSettings();
   });
 
-  $('#showAircraftPhotos')?.addEventListener('change', (e) => {
-    currentSettings.showAircraftPhotos = e.target.checked;
-    saveSettings();
-    renderFlightList();
-  });
-
-  // Delegated click handler to reliably open external photo links in new browser tab
-  document.addEventListener('click', (e) => {
-    const link = e.target.closest('.external-photo-link');
-    if (link && link.href) {
-      e.preventDefault();
-      try {
-        chrome.tabs.create({ url: link.href });
-      } catch (err) {
-        window.open(link.href, '_blank');
-      }
-    }
-  });
 
   $('#testChimeBtn').addEventListener('click', handleTestChime);
 
@@ -677,102 +655,6 @@ export function updateCockpitHeader(tabName) {
   }
 }
 
-// ============================================================
-//  Aircraft Photo Display Helpers
-// ============================================================
-
-async function loadHeroAircraftPhoto(registration) {
-  const mount = $('#heroPhotoMount');
-  if (!mount) return;
-
-  if (!currentSettings.showAircraftPhotos) {
-    mount.innerHTML = '';
-    return;
-  }
-
-  const cleanReg = registration && registration !== '—' ? registration : null;
-  if (!cleanReg) {
-    mount.innerHTML = '';
-    return;
-  }
-
-  try {
-    const photo = await fetchAircraftPhoto(cleanReg, {
-      enabled: currentSettings.showAircraftPhotos
-    });
-
-    if (!photo || !mount) {
-      if (mount) mount.innerHTML = '';
-      return;
-    }
-
-    mount.innerHTML = `
-      <div class="hero-photo-card">
-        <div class="hero-photo-img-wrap">
-          <img class="hero-photo-img" src="${esc(photo.largeUrl || photo.thumbnailUrl)}" alt="${esc(photo.registration)}" loading="lazy" />
-        </div>
-        <div class="hero-photo-caption mono">
-          <span>${esc(photo.registration)}</span>
-          <span>Photo © <a href="${esc(photo.link)}" class="external-photo-link" target="_blank" rel="noopener noreferrer">${esc(photo.photographer)}</a> / Planespotters.net</span>
-        </div>
-      </div>
-    `;
-
-    const img = mount.querySelector('.hero-photo-img');
-    if (img) {
-      if (img.complete) {
-        img.classList.add('loaded');
-      } else {
-        img.addEventListener('load', () => img.classList.add('loaded'));
-        img.addEventListener('error', () => { mount.innerHTML = ''; });
-      }
-    }
-  } catch (e) {
-    if (mount) mount.innerHTML = '';
-  }
-}
-
-async function loadDrawerAircraftPhoto(rowElement) {
-  if (!currentSettings.showAircraftPhotos || !rowElement) return;
-  const mount = rowElement.querySelector('.drawer-photo-mount');
-  if (!mount || mount.dataset.loaded === 'true') return;
-
-  const reg = mount.dataset.reg;
-  if (!reg || reg === '—') return;
-
-  mount.dataset.loaded = 'true';
-  try {
-    const photo = await fetchAircraftPhoto(reg, {
-      enabled: currentSettings.showAircraftPhotos
-    });
-
-    if (!photo || !mount) return;
-
-    mount.innerHTML = `
-      <div class="detail-photo-card">
-        <div class="detail-photo-img-wrap">
-          <img class="detail-photo-img" src="${esc(photo.largeUrl || photo.thumbnailUrl)}" alt="${esc(photo.registration)}" loading="lazy" />
-        </div>
-        <div class="detail-photo-caption mono">
-          <span>${esc(photo.registration)}</span>
-          <span>Photo © <a href="${esc(photo.link)}" class="external-photo-link" target="_blank" rel="noopener noreferrer">${esc(photo.photographer)}</a> / Planespotters.net</span>
-        </div>
-      </div>
-    `;
-
-    const img = mount.querySelector('.detail-photo-img');
-    if (img) {
-      if (img.complete) {
-        img.classList.add('loaded');
-      } else {
-        img.addEventListener('load', () => img.classList.add('loaded'));
-        img.addEventListener('error', () => { mount.innerHTML = ''; });
-      }
-    }
-  } catch (e) {
-    if (mount) mount.innerHTML = '';
-  }
-}
 
 // ============================================================
 //  SCREEN 1: Live Feed with Hero & Nearby Rows
@@ -882,7 +764,6 @@ async function renderFlightList() {
           expandedFlightId = id;
           container.querySelectorAll('.flight-row-item').forEach(el => el.classList.remove('expanded'));
           item.classList.add('expanded');
-          loadDrawerAircraftPhoto(item);
         }
       });
     });
@@ -949,9 +830,6 @@ async function renderFlightList() {
         <span class="vis-indicator ${heroVis.contrast}"></span>
         <span class="vis-hint-text">${esc(heroVis.hint)}</span>
       </div>
-
-      <!-- Opt-in Aircraft Photo Preview (Planespotters.net) -->
-      <div class="hero-photo-mount" id="heroPhotoMount"></div>
     </div>
   `;
 
@@ -970,11 +848,6 @@ async function renderFlightList() {
 
   container.innerHTML = html;
 
-  // Lazily load hero photo if enabled
-  if (hero && hero.registration) {
-    loadHeroAircraftPhoto(hero.registration);
-  }
-
   $$('.flight-row-item').forEach(item => {
     item.addEventListener('click', () => {
       const id = item.dataset.id;
@@ -985,7 +858,6 @@ async function renderFlightList() {
         expandedFlightId = id;
         $$('.flight-row-item').forEach(el => el.classList.remove('expanded'));
         item.classList.add('expanded');
-        loadDrawerAircraftPhoto(item);
       }
     });
   });
@@ -1059,7 +931,6 @@ function buildNearbyRowHtml(f) {
           <span class="vis-indicator ${vis.contrast}"></span>
           <span>VISIBILITY: ${esc(vis.hint)}</span>
         </div>
-        <div class="drawer-photo-mount" data-reg="${esc(f.registration || '')}"></div>
       </div>
     </div>
   `;
@@ -1117,7 +988,6 @@ async function renderLogView() {
         expandedLogId = id;
         $$('.log-row-item').forEach(el => el.classList.remove('expanded'));
         row.classList.add('expanded');
-        loadDrawerAircraftPhoto(row);
       }
     });
   });
@@ -1190,7 +1060,6 @@ function buildLogRowHtml(r) {
           <span class="vis-indicator ${vis.contrast}"></span>
           <span>VISIBILITY: ${esc(vis.hint)}</span>
         </div>
-        <div class="drawer-photo-mount" data-reg="${esc(r.registration || '')}"></div>
       </div>
     </div>
   `;
@@ -1790,11 +1659,8 @@ function renderRadarSelectedTarget(flight) {
           <span class="hud-v mono">${etaText}</span>
         </div>
       </div>
-      <div class="drawer-photo-mount" data-reg="${esc(flight.registration || '')}"></div>
     </div>
   `;
-
-  loadDrawerAircraftPhoto(box);
 
   $('#btnCloseRadarTarget')?.addEventListener('click', () => {
     box.style.display = 'none';
@@ -2203,7 +2069,6 @@ function buildRecentLogRowHtml(r) {
           <span class="vis-indicator ${vis.contrast}"></span>
           <span>VISIBILITY: ${esc(vis.hint)}</span>
         </div>
-        <div class="drawer-photo-mount" data-reg="${esc(r.registration || '')}"></div>
       </div>
     </div>
   `;

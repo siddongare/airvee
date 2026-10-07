@@ -26,7 +26,6 @@ I built it with AI coding tools and then tested, reviewed and reshaped it myself
 - **Watchlist.** Alert rules by aircraft type, airline, registration, callsign prefix, or cargo and passenger flights, plus a "rare for me" rule based on your own log. Each rule can use its own alert style.
 - **Log and statistics.** Every overhead pass is stored on your device. Includes a collection of airlines, aircraft types and registrations you have seen, an hour-by-weekday heatmap, and "likely today" suggestions from your own history.
 - **Visibility hint.** Simple rules based on sun height and cloud cover to suggest looking conditions, for example "Night · look for strobe lights". Not a physical simulation.
-- **Aircraft photos.** Off by default. When enabled, shows a photo with the photographer's credit.
 
 ## Install
 1. Clone or download this repository.
@@ -35,7 +34,7 @@ I built it with AI coding tools and then tested, reviewed and reshaped it myself
 To test without live flights, click the version tag in Settings 5 times to turn on simulated mock flights.
 
 ## Develop
-- `npm test` runs the test suite (59 passing tests).
+- `npm test` runs the test suite (58 passing tests).
 - `npm run check` runs a syntax check and the tests.
 
 ## Data and privacy

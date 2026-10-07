@@ -17,7 +17,6 @@ import { logFlightPass, cacheCallsignRoute, resolveRouteFromCache, getSightingCo
 import { evaluateFlightWatchlist, isInherentlyRare, isMilitaryAircraft, isCargoAircraft, DEFAULT_INHERENTLY_RARE_TYPES } from './lib/watchlist.js';
 import { recordHeartbeat } from './lib/schedule.js';
 import { calculateSunElevation, fetchCloudCover, classifyVisibility } from './lib/visibility.js';
-import { fetchAircraftPhoto } from './lib/photos.js';
 import { formatNotificationAirline } from './lib/airline-logos.js';
 
 // ---- Configuration Defaults ----
@@ -49,7 +48,7 @@ const DEFAULTS = {
   mockProviderEnabled: false,   // Hidden debug mock data provider
   rareSeenThreshold: 2,         // Number of times seen in log to count as rare
   watchlistRules: [],           // Array of watchlist rules
-  showAircraftPhotos: false,    // Opt-in setting to show real aircraft photos via Planespotters.net
+  showAircraftPhotos: false,    // Legacy key retained for schema migration stability
   radarOrientation: 'facing_up' // 'facing_up' (relative to user facing) or 'north_up'
 };
 
@@ -844,14 +843,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch(e => sendResponse({ success: false, error: e.message }));
       return true;
 
-
-    case 'FETCH_AIRCRAFT_PHOTO':
-      getSettings().then(stg => {
-        return fetchAircraftPhoto(msg.registration, { enabled: stg.showAircraftPhotos });
-      })
-      .then(photo => sendResponse({ photo }))
-      .catch(e => sendResponse({ photo: null, error: e.message }));
-      return true;
 
     case 'PLAY_CHIME':
       // Handled directly by offscreen document

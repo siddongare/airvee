@@ -7,7 +7,6 @@ Airvee has no server, no accounts, no analytics and no advertising. Your locatio
 |---|---|---|---|
 | Flight positions | While the extension is active | A search area: your location and radius | Flightradar24 (`data-cloud.flightradar24.com`) |
 | Cloud cover | Only if the cloud-cover hint is enabled | Your latitude and longitude rounded to 2 decimals (about 1 km) | Open-Meteo |
-| Aircraft photo | Only if photos are enabled (off by default) | An aircraft registration or type | Planespotters.net |
 
 The flight-data provider necessarily learns your approximate area, because that is how a "flights near me" query works. Every service you contact also sees your IP address, as with any website. Airvee itself never receives any of this data.
 
@@ -26,8 +25,6 @@ Clicking a notification opens `https://www.flightradar24.com/<callsign>` in a ne
 - `offscreen`: plays the alert chime audio from an offscreen document because Manifest V3 service workers cannot access audio APIs directly.
 - `https://data-cloud.flightradar24.com/*`: fetches live flight positions within your search area.
 - `https://api.open-meteo.com/*`: fetches localized cloud cover for optical visibility classification.
-- `https://api.planespotters.net/*`: fetches aircraft photo metadata when photo lookup is enabled.
-- `https://*.plnspttrs.net/*`: loads aircraft photos from the Planespotters CDN.
 
 ## Remote code
 None. All scripts, fonts and libraries are bundled in the extension.

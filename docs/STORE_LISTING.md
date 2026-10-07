@@ -16,9 +16,9 @@ What you get:
 - A radar view centred on you
 - A local log of every pass, with statistics and a collection of airlines, aircraft types and registrations
 - Watchlist rules, for example only alert for an A380 or a specific airline
-- Optional cloud-cover hint and optional aircraft photos (both can be turned off)
+- Optional cloud-cover hint (can be turned off)
 
-Privacy: your location, settings and flight log stay on your device. The extension sends your approximate area to the flight-data provider to find nearby aircraft, and, only if you enable them, your location (rounded to about 1 km) to Open-Meteo for cloud cover and an aircraft registration to Planespotters for photos. No analytics, no accounts, no tracking. Full details in the privacy policy.
+Privacy: your location, settings and flight log stay on your device. The extension sends your approximate area to the flight-data provider to find nearby aircraft, and, only if you enable it, your location (rounded to about 1 km) to Open-Meteo for cloud cover. No analytics, no accounts, no tracking. Full details in the privacy policy.
 
 Limitations: predictions depend on ADS-B data quality and coverage in your region. Passenger counts are not available; seat numbers are estimates from aircraft type.
 
@@ -32,8 +32,6 @@ Permission justifications:
 - offscreen: plays the alert chime because service workers cannot play audio directly
 - https://data-cloud.flightradar24.com/*: fetches live ADS-B flight data within the observer bounding box
 - https://api.open-meteo.com/*: fetches localized cloud cover for optical visibility hints
-- https://api.planespotters.net/*: opt-in lookup of aircraft photos by registration
-- https://*.plnspttrs.net/*: loads aircraft thumbnail images from Planespotters image CDN
 
 Remote code: none. All scripts, fonts and libraries are bundled in the extension.
 
