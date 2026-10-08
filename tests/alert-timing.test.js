@@ -243,3 +243,89 @@ test('Alert Timing: Alert rules (loud, log, ignore) still apply accurately', () 
   assert.equal(evalLog.alertSuppressedBy, 'rule_log', 'defaultAction log suppresses notification chime');
   assert.equal(evalLog.shown, true, 'Still shown in UI and eligible for logging');
 });
+
+// Mock chrome API for background.js import in Node test environment
+if (!globalThis.chrome) {
+  globalThis.chrome = {
+    storage: {
+      local: {
+        get: async () => ({}),
+        set: async () => ({})
+      }
+    },
+    alarms: {
+      get: async () => null,
+      create: async () => {},
+      onAlarm: { addListener: () => {} }
+    },
+    runtime: {
+      onMessage: { addListener: () => {} },
+      onInstalled: { addListener: () => {} },
+      onStartup: { addListener: () => {} },
+      sendMessage: async () => {}
+    },
+    notifications: {
+      create: async () => {},
+      clear: async () => {},
+      onClicked: { addListener: () => {} }
+    },
+    offscreen: {
+      hasDocument: async () => false,
+      createDocument: async () => {},
+      closeDocument: async () => {}
+    }
+  };
+}
+
+const { formatETA, formatNotificationTitle } = await import('../background.js');
+
+test('Notification Title: formatETA formats lead time in mm:ss (45s, 60s, 125s)', () => {
+  assert.equal(formatETA(45), '00:45');
+  assert.equal(formatETA(60), '01:00');
+  assert.equal(formatETA(125), '02:05');
+  assert.equal(formatETA(-5), '—');
+  assert.equal(formatETA(null), '—');
+});
+
+test('Notification Title: Notification title formats overhead in mm:ss for 45s, 60s, and 125s', () => {
+  const flight45 = {
+    airline: 'Air India',
+    callsign: 'AIC101',
+    flightNumber: 'AI101',
+    eta: 45
+  };
+  const title45 = formatNotificationTitle(flight45);
+  assert.equal(title45, 'AIRVEE · AI · Air India AI101 · overhead in 00:45');
+
+  const flight60 = {
+    airline: 'Air India',
+    callsign: 'AIC101',
+    flightNumber: 'AI101',
+    eta: 60
+  };
+  const title60 = formatNotificationTitle(flight60);
+  assert.equal(title60, 'AIRVEE · AI · Air India AI101 · overhead in 01:00');
+
+  const flight125 = {
+    airline: 'Air India',
+    callsign: 'AIC101',
+    flightNumber: 'AI101',
+    eta: 125
+  };
+  const title125 = formatNotificationTitle(flight125);
+  assert.equal(title125, 'AIRVEE · AI · Air India AI101 · overhead in 02:05');
+});
+
+test('Notification Title: Formats with alert tag and new badge', () => {
+  const flight = {
+    airline: 'Emirates',
+    callsign: 'UAE504',
+    flightNumber: 'EK504',
+    airlineIcao: 'UAE',
+    eta: 45,
+    isNew: true
+  };
+  const title = formatNotificationTitle(flight, 'LOUD');
+  assert.equal(title, 'AIRVEE [LOUD · NEW] · EK · Emirates EK504 · overhead in 00:45');
+});
+

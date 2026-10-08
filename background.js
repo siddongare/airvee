@@ -49,8 +49,40 @@ export {
   migrateSettings,
   SCHEMA_VERSION,
   ALERT_LEAD_MIN_S,
-  ALERT_LEAD_MAX_S
+  ALERT_LEAD_MAX_S,
+  formatETA,
+  formatNotificationTitle
 };
+
+/**
+ * Format ETA in seconds to mm:ss matching popup.js formatETA.
+ */
+function formatETA(seconds) {
+  if (seconds == null || isNaN(seconds) || seconds < 0) return '—';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+/**
+ * Format notification title with airline, flight ID, and lead time in mm:ss.
+ */
+function formatNotificationTitle(flight, alertTag = '') {
+  const etaStr = formatETA(flight?.eta);
+  const airlineName = formatNotificationAirline(flight);
+  const flightId = flight ? (flight.flightNumber || flight.callsign) : '';
+  const flightIdSuffix = (flightId && !airlineName.includes(flightId)) ? ` ${flightId}` : '';
+
+  let titlePrefix = 'AIRVEE';
+  if (alertTag && flight?.isNew) {
+    titlePrefix = `AIRVEE [${alertTag} · NEW]`;
+  } else if (alertTag) {
+    titlePrefix = `AIRVEE [${alertTag}]`;
+  } else if (flight?.isNew) {
+    titlePrefix = `AIRVEE [NEW]`;
+  }
+  return `${titlePrefix} · ${airlineName}${flightIdSuffix} · overhead in ${etaStr}`;
+}
 
 /**
  * Pure helper to compute updated peak simultaneous flights inside user detection radius.
@@ -587,13 +619,9 @@ async function pollFlights() {
     const alreadyNotified = await hasBeenNotifiedToday(flight.id);
     if (alreadyNotified) continue;
 
-    const etaMinutes = (flight.eta / 60).toFixed(1);
     const route = (flight.origin && flight.destination)
       ? `${flight.origin} → ${flight.destination}${flight.isRouteLikely ? ' (likely)' : ''}`
       : 'En route';
-    const airlineName = formatNotificationAirline(flight);
-    const flightId = flight.flightNumber || flight.callsign;
-    const flightIdSuffix = (flightId && !airlineName.includes(flightId)) ? ` ${flightId}` : '';
     const aircraftTypeStr = flight.aircraftType ? ` · ${flight.aircraftType}` : '';
 
     // Look direction: "Look SW, 40° up" or relative "Look SW (front-left), 40° up"
@@ -603,15 +631,7 @@ async function pollFlights() {
       settings.userFacing
     );
 
-    let titlePrefix = 'AIRVEE';
-    if (alertTag && flight.isNew) {
-      titlePrefix = `AIRVEE [${alertTag} · NEW]`;
-    } else if (alertTag) {
-      titlePrefix = `AIRVEE [${alertTag}]`;
-    } else if (flight.isNew) {
-      titlePrefix = `AIRVEE [NEW]`;
-    }
-    const title = `${titlePrefix} · ${airlineName}${flightIdSuffix} in ${etaMinutes}m`;
+    const title = formatNotificationTitle(flight, alertTag);
     const newSeenStr = (flight.isNew && flight.newLabel) ? ` · First time seen: ${flight.newLabel}` : '';
     const message = `${route}${aircraftTypeStr} · ${lookDir}${flight.watchlistRuleName ? ` · ${flight.watchlistRuleName}` : ''}${newSeenStr}`;
 
