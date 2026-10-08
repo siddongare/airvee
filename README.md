@@ -11,7 +11,19 @@ Know where to look when a plane passes overhead.
 
 Airvee is a Chrome extension that watches the sky around a location you choose, predicts which flights will pass close to you, and tells you which way to look and how high, for example "Look NW, 23 degrees up".
 
-<!-- TODO: add screenshots and a short demo GIF under docs/images/ and link them here -->
+<p align="center">
+  <img src="docs/images/demo.gif" width="360" alt="Airvee demo in action" />
+</p>
+
+### Screenshots
+
+| Live Tracking | Radar Scope | Alert Rules |
+| :---: | :---: | :---: |
+| <img src="docs/images/live.png" width="220" alt="Live overhead flight tracking" /> | <img src="docs/images/radar.png" width="220" alt="Radar scope with heading vectors" /> | <img src="docs/images/alerts.png" width="220" alt="Configurable alert rules" /> |
+
+| Flight Pass Log | Pass Statistics & Heatmap |
+| :---: | :---: |
+| <img src="docs/images/log.png" width="220" alt="Flight pass log history" /> | <img src="docs/images/stats.png" width="220" alt="Activity heatmap and sightings" /> |
 
 ## Why I built this
 
