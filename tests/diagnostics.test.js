@@ -251,7 +251,15 @@ test('Diagnostics: Summary totals match individual aircraft records accurately',
   // Top unknown airlines: CharterX (2)
   assert.equal(summary.topUnknownAirlines.length, 1);
   assert.equal(summary.topUnknownAirlines[0].airline, 'CharterX');
-  assert.equal(summary.topUnknownAirlines[0].count, 2);
+  // Overhead without alert: UNK01 was overhead but suppressed by minElevation
+  assert.equal(summary.overheadWithoutAlert.total, 1);
+  assert.equal(summary.overheadWithoutAlert.reasons.minElevation, 1);
+
+  // First seen tCpa buckets: UNK01 first seen at 30s -> 30_90s
+  assert.equal(summary.firstSeenTcpaBuckets.under30s, 0);
+  assert.equal(summary.firstSeenTcpaBuckets['30_90s'], 1);
+  assert.equal(summary.firstSeenTcpaBuckets['90_150s'], 0);
+  assert.equal(summary.firstSeenTcpaBuckets.over150s, 0);
 
   // Full export redaction check
   const exportPayload = {

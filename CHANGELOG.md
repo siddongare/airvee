@@ -5,6 +5,8 @@ All notable changes to Airvee are documented here.
 ## [Unreleased]
 
 ### Changed
+- Expanded alert lead time window to 10–150 seconds (`ALERT_LEAD_MIN_S = 10`, `ALERT_LEAD_MAX_S = 150`) so flights first detected late (e.g. at 60s) alert immediately instead of being missed, while passes under 10s are logged without alerting.
+- Added `overheadWithoutAlert` (with breakdown by suppression reason) and `firstSeenTcpaBuckets` to diagnostics summary metrics.
 - Consolidated default settings into `lib/settings-defaults.js` as the single source of truth across service worker, popup UI, and radar.
 - Set unified default detection radius to 30 km and default flight filter to 'all' across the entire extension.
 - Defaulted observer facing direction to 'Not set' (`''`), providing compass-only guidance and north-up radar until configured, while preserving existing saved selections.

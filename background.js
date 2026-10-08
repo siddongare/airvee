@@ -29,6 +29,8 @@ import {
   classifyFlightWithRule,
   classifyFlight,
   INDIAN_AIRPORTS,
+  ALERT_LEAD_MIN_S,
+  ALERT_LEAD_MAX_S,
   ETA_MIN_S,
   ETA_MAX_S
 } from './lib/filter.js';
@@ -39,7 +41,16 @@ import {
   SCHEMA_VERSION
 } from './lib/settings-defaults.js';
 
-export { classifyFlightWithRule, classifyFlight, evaluateAircraft, DEFAULTS, migrateSettings, SCHEMA_VERSION };
+export {
+  classifyFlightWithRule,
+  classifyFlight,
+  evaluateAircraft,
+  DEFAULTS,
+  migrateSettings,
+  SCHEMA_VERSION,
+  ALERT_LEAD_MIN_S,
+  ALERT_LEAD_MAX_S
+};
 
 /**
  * Pure helper to compute updated peak simultaneous flights inside user detection radius.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAircraft, classifyFlight, ETA_MIN_S, ETA_MAX_S } from '../lib/filter.js';
+import { evaluateAircraft, classifyFlight, ALERT_LEAD_MIN_S, ALERT_LEAD_MAX_S, ETA_MIN_S, ETA_MAX_S } from '../lib/filter.js';
 import { classifyPass } from '../lib/geo.js';
 
 /**
@@ -211,13 +211,19 @@ test('Filter: Table-driven comparison of evaluateAircraft vs old live reference 
       settings: { ...defaultSettings, maxAltitudeFt: 55000 }
     },
     {
-      name: 'Case 22: Overhead pass with ETA < ETA_MIN_S (60s < 90s) suppresses alert',
+      name: 'Case 22: Overhead pass with ETA < ALERT_LEAD_MIN_S (9s < 10s) suppresses alert',
       flight: { callsign: 'AIC106', airlineIcao: 'AIC', aircraftType: 'A320', altitudeFt: 30000, origin: 'DEL', destination: 'BOM', lat: 19.1, lon: 72.8 },
+      cpa: { tCpa: 9, dCpa: 2.0, elevationAtCpa: 50, isInbound: true },
+      settings: { ...defaultSettings }
+    },
+    {
+      name: 'Case 22b: Overhead pass with ETA = 60s (between 10s and 150s) alerts immediately',
+      flight: { callsign: 'AIC106B', airlineIcao: 'AIC', aircraftType: 'A320', altitudeFt: 30000, origin: 'DEL', destination: 'BOM', lat: 19.1, lon: 72.8 },
       cpa: { tCpa: 60, dCpa: 2.0, elevationAtCpa: 50, isInbound: true },
       settings: { ...defaultSettings }
     },
     {
-      name: 'Case 23: Overhead pass with ETA > ETA_MAX_S (200s > 150s) suppresses alert',
+      name: 'Case 23: Overhead pass with ETA > ALERT_LEAD_MAX_S (200s > 150s) suppresses alert',
       flight: { callsign: 'AIC107', airlineIcao: 'AIC', aircraftType: 'A320', altitudeFt: 30000, origin: 'DEL', destination: 'BOM', lat: 19.1, lon: 72.8 },
       cpa: { tCpa: 200, dCpa: 2.0, elevationAtCpa: 50, isInbound: true },
       settings: { ...defaultSettings }

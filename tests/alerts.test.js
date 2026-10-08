@@ -102,7 +102,7 @@ function oldReferenceEvaluation(flight, settings = {}, geoResult = null, options
     }
     if (eta === null || eta <= 0) {
       alertSuppressedBy = 'no_eta';
-    } else if (eta < 90 || eta > 150) {
+    } else if (eta < 10 || eta > 150) {
       alertSuppressedBy = 'eta_out_of_bounds';
     } else {
       const minElev = settings.minElevationDeg != null ? settings.minElevationDeg : 15;
