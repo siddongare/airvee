@@ -29,7 +29,7 @@ Screenshots use simulated flights from the built-in mock provider.
 
 ## Why I built this
 
-I live in Central India, which sits under busy long-haul routes. A lot of Ethiopian, Qatar Airways and Emirates flights pass overhead, and I kept missing them. Flight-tracking apps show where a plane is, but I wanted something that taps me on the shoulder two minutes before it arrives and tells me which way to look. Airvee is that: a small extension that predicts the closest point of approach to my exact spot and turns it into a direction and an angle.
+I live in Central India, under a busy route that connects the Middle East with East Asia. I'm fascinated by planes and try to photograph them whenever I spot one, and many of these aircraft are worth capturing. The problem was timing: by the time I noticed a plane, it was already past my roof. I wanted something that pings me a couple of minutes before a flight passes over my roof and tells me where to look, so I built Airvee.
 
 The geometry is documented in [docs/geometry.md](docs/geometry.md) so you can check the maths rather than take my word for it.
 
