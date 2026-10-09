@@ -49,6 +49,9 @@ console.log('\n--- 3. Case B: Passing 20 km East of Observer (UAE504) ---');
 const fB = flights.find(f => f.callsign === 'UAE504');
 assert(fB !== undefined, 'Flight UAE504 exists');
 assert(fB.altitudeFt === 33000, `Altitude is 33,000 ft (got ${fB.altitudeFt})`);
+assert(fB.altitude === 33000, `Flight UAE504 has realistic altitude alias matching altitudeFt (got ${fB.altitude})`);
+assert(fB.altitude > 0, 'Flight UAE504 altitude is positive realistic flight level, never 0 ft');
+assert(flights.every(f => f.altitude > 0 && f.altitude === f.altitudeFt), 'All mock flights provide positive realistic altitude property (never 0 ft)');
 
 const cpaB = calculateCPA(
   fB.lat, fB.lon, fB.altitudeFt, fB.groundSpeedKt, fB.trackDeg, fB.verticalRateFpm,

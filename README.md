@@ -17,6 +17,8 @@ Airvee is a Chrome extension that watches the sky around a location you choose, 
 
 ### Screenshots
 
+Screenshots use simulated flights from the built-in mock provider.
+
 | Live Tracking | Radar Scope | Alert Rules |
 | :---: | :---: | :---: |
 | <img src="docs/images/live.png" width="220" alt="Live overhead flight tracking" /> | <img src="docs/images/radar.png" width="220" alt="Radar scope with heading vectors" /> | <img src="docs/images/alerts.png" width="220" alt="Configurable alert rules" /> |
@@ -29,13 +31,13 @@ Airvee is a Chrome extension that watches the sky around a location you choose, 
 
 I live in Central India, which sits under busy long-haul routes. A lot of Ethiopian, Qatar Airways and Emirates flights pass overhead, and I kept missing them. Flight-tracking apps show where a plane is, but I wanted something that taps me on the shoulder two minutes before it arrives and tells me which way to look. Airvee is that: a small extension that predicts the closest point of approach to my exact spot and turns it into a direction and an angle.
 
-I built it with AI coding tools and then tested, reviewed and reshaped it myself. The geometry is documented in [docs/geometry.md](docs/geometry.md) so you can check the maths rather than take my word for it.
+The geometry is documented in [docs/geometry.md](docs/geometry.md) so you can check the maths rather than take my word for it.
 
 ## What it does
 - **Overhead vs. near-you separation.** From each aircraft's position, speed and heading, Airvee calculates its predicted closest point of approach (CPA). A flight is classified as **overhead** only when it is strictly inbound, passes within your overhead threshold (default 5 km), and achieves an elevation angle above the horizon (default ≥15°). Only overhead flights trigger notifications, chimes, live countdowns, and accent styling. All other aircraft inside your detection radius appear under **Near you** with neutral styling and status (e.g. "Closest 14 km east in 2:10" or "Moving away") without alerting.
 - **Look direction.** The compass direction and elevation angle to look at, relative to the direction you face.
 - **Radar view.** A canvas radar centred on you with range rings, plane trails and your facing direction.
-- **Watchlist.** Alert rules by aircraft type, airline, registration, callsign prefix, or cargo and passenger flights, plus a "rare for me" rule based on your own log. Each rule can use its own alert style.
+- **Alerts.** Choose what you are alerted about: every overhead flight, or only the flights you pick (by airline, aircraft type, category such as cargo or wide-body, direction of travel, registration or callsign). Each rule can alert normally, alert loudly, only log, or ignore.
 - **Log and statistics.** Every overhead pass is stored on your device. Includes a collection of airlines, aircraft types and registrations you have seen, an hour-by-weekday heatmap, and "likely today" suggestions from your own history.
 - **Visibility hint.** Simple rules based on sun height and cloud cover to suggest looking conditions, for example "Night · look for strobe lights". Not a physical simulation.
 
